@@ -34,7 +34,7 @@ const activitySchema = new Schema<IActivity>({
   },
   entityType: {
     type: String,
-    enum: ['guest', 'task', 'budget', 'vendor', 'collaborator', 'note'],
+    enum: ['guest', 'task', 'budget', 'vendor', 'collaborator', 'note','wedding'],
     required: true
   },
   entityId: {

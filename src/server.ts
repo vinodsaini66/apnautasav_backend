@@ -11,10 +11,12 @@ import routes from './routes';
 import { errorMiddleware } from './middleware/error.middleware';
 import { loggingMiddleware } from './middleware/logging.middleware';
 import { rateLimitMiddleware } from './middleware/rateLimit.middleware';
+import mongoose from 'mongoose';
 import { initializeSocket } from './config/socket';
 import { createServer } from 'http';
 // Load environment variables
 dotenv.config();
+mongoose.set("debug", true);
 
 const app: Application = express();
 const httpServer = createServer(app);
@@ -22,8 +24,6 @@ const PORT = process.env.PORT || 5000;
 
 // Initialize Socket.IO
 const socketServer = initializeSocket(httpServer);
-
-// Make socket server available in request context
 app.set('socketServer', socketServer);
 
 // Security middleware
