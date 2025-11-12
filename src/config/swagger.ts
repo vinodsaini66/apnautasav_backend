@@ -22,7 +22,7 @@ const definition =
       "description": "Development server"
     },
     {
-      "url": "https://api.weddingmanager.com/api/v1",
+      "url": "https://apnautasav-backend.onrender.com/api/v1",
       "description": "Production server"
     }
   ],
