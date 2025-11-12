@@ -28,10 +28,11 @@ const PORT = process.env.PORT || 5000;
 
 // Security middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || '*',
-  credentials: true
-}));
+// app.use(cors({
+//   origin: process.env.CORS_ORIGIN?.split(',') || '*',
+//   credentials: true
+// }));
+app.use(cors({ origin: "*", credentials: false }));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
