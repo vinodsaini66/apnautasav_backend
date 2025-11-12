@@ -7,7 +7,10 @@ import logger from '../utils/logger';
 export class AuthService {
   static async sendOTP(phoneNumber: string): Promise<{ success: boolean; message: string }> {
     try {
-      const otp = generateOTP(6);
+      const otp = process.env.NODE_ENV === 'development'
+    ? '123456'
+    : generateOTP(6);
+
       const otpExpiry = new Date(Date.now() + parseInt(process.env.OTP_EXPIRY_MINUTES || '10') * 60 * 1000);
 
       let user = await User.findOne({ phoneNumber }).select('+otp +otpExpiry');

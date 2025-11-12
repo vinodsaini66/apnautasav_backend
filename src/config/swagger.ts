@@ -6,92 +6,71 @@ import swaggerUi from 'swagger-ui-express';
 
 const definition =
 {
-  openapi: '3.0.0',
-  info: {
-    title: 'Family Wedding Manager API',
-    version: '1.0.0',
-    description: 'Comprehensive API documentation for Family Wedding Manager',
-    contact: {
-      name: 'API Support',
-      email: 'support@weddingmanager.com'
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Family Wedding Manager API",
+    "version": "1.0.0",
+    "description": "Comprehensive API documentation for Family Wedding Manager - A collaborative wedding planning platform",
+    "contact": {
+      "name": "API Support",
+      "email": "support@weddingmanager.com"
     }
   },
-  servers: [
+  "servers": [
     {
-      url: `http://localhost:${process.env.PORT || 5000}/api/v1`,
-      description: 'Development server'
+      "url": "http://localhost:5000/api/v1",
+      "description": "Development server"
     },
     {
-      url: 'https://api.weddingmanager.com/api/v1',
-      description: 'Production server'
+      "url": "https://api.weddingmanager.com/api/v1",
+      "description": "Production server"
     }
   ],
-  components: {
-    securitySchemes: {
-      bearerAuth: {
-        type: "http",
-        in: "header",
-        name: "Authorization",
-        scheme: "bearer",
-        bearerFormat: "JWT",
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       }
-    }
-  },
-  security: [{
-    bearerAuth: []
-  }],
-  paths: {
-    "/weddings/{page}/{limit}": {
-      "get": {
-        "tags": ["Wedding"],
-        "security": [
-          {
-            "bearerAuth": []
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "error"
+          },
+          "message": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
           }
-        ],
-        "produces": ["application/json"],
-        "parameters": [
-          // {
-          //   "$ref": "#/components/parameters/refreshHeader"
-          // },
-          {
-            "name": "page",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
+        }
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
           },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
+          "message": {
+            "type": "string"
           },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-        ],
-        "responses": {
-          "200": {
-            "description": "List of office bearers fetched successfully"
-          },
-          "400": {
-            "description": "Validation error - invalid parameters"
-          },
-          "401": {
-            "description": "Unauthorized"
+          "data": {
+            "type": "object"
           }
         }
       }
-    },
+    }
+  },
+  "paths": {
     "/auth/send-otp": {
       "post": {
         "tags": ["Authentication"],
@@ -2489,8 +2468,425 @@ const definition =
           }
         }
       }
+    },
+    "/comments/{commentId}": {
+      "put": {
+        "tags": ["Comments"],
+        "summary": "Edit comment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["content"],
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comment updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Comment not found or unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Comments"],
+        "summary": "Delete comment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Comment not found or unauthorized"
+          }
+        }
+      }
+    },
+    "/comments/{commentId}/like": {
+      "post": {
+        "tags": ["Comments"],
+        "summary": "Like/Unlike comment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment liked/unliked successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Comment not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/notes": {
+      "post": {
+        "tags": ["Shared Notes"],
+        "summary": "Create shared note",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "content"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "example": "Vendor Contact List"
+                  },
+                  "content": {
+                    "type": "string",
+                    "example": "List of all vendor contacts and requirements"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": ["vendors", "contacts"]
+                  },
+                  "collaborators": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Array of user IDs who can edit this note"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Note created successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "get": {
+        "tags": ["Shared Notes"],
+        "summary": "Get all notes",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notes fetched successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/notes/{noteId}": {
+      "put": {
+        "tags": ["Shared Notes"],
+        "summary": "Update note",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "collaborators": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "isPinned": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Note updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Note not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Shared Notes"],
+        "summary": "Delete note",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "noteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Note deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Note not found"
+          }
+        }
+      }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "User authentication and authorization endpoints"
+    },
+    {
+      "name": "Weddings",
+      "description": "Wedding management endpoints"
+    },
+    {
+      "name": "Guests",
+      "description": "Guest list management endpoints"
+    },
+    {
+      "name": "Tasks",
+      "description": "Task and todo management endpoints"
+    },
+    {
+      "name": "Budget",
+      "description": "Budget tracking and analytics endpoints"
+    },
+    {
+      "name": "Vendors",
+      "description": "Vendor management endpoints"
+    },
+    {
+      "name": "Collaborators",
+      "description": "Collaboration and team management endpoints"
+    },
+    {
+      "name": "Activities",
+      "description": "Activity feed and audit trail endpoints"
+    },
+    {
+      "name": "Notifications",
+      "description": "User notification management endpoints"
+    },
+    {
+      "name": "Comments",
+      "description": "Comments and discussion endpoints"
+    },
+    {
+      "name": "Shared Notes",
+      "description": "Collaborative note-taking endpoints"
+    }
+  ]
 }
 
 const options = {
