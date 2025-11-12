@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IWedding extends Document {
+  name: string;
   weddingCode: string;
   brideName: string;
   groomName: string;
@@ -18,6 +19,11 @@ export interface IWedding extends Document {
 }
 
 const weddingSchema = new Schema<IWedding>({
+  name: {
+    type: String,
+    required: [true, 'Location is required'],
+    trim: true
+  },
   weddingCode: {
     type: String,
     required: true,
