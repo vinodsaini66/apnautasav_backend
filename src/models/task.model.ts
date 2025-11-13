@@ -41,7 +41,7 @@ const taskSchema = new Schema<ITask>({
   },
   category: {
     type: String,
-    enum: ['decoration', 'catering', 'logistics', 'invitations', 'music', 'photography', 'others'],
+    enum: ['venue', 'decoration', 'catering', 'logistics', 'invitations', 'music', 'photography', 'others'],
     required: true
   },
   priority: {
