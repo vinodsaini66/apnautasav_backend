@@ -13,12 +13,13 @@ export class WeddingController {
   static async createWedding(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.userId;
-      const { brideName, groomName, weddingDate, location, totalBudget, currency, description, imageUrl } = req.body;
+      const { brideName, groomName, weddingDate, location, totalBudget, currency, description, imageUrl,name } = req.body;
 
       const weddingCode = generateWeddingCode();
 
       const wedding = await Wedding.create({
         weddingCode,
+        name,
         brideName,
         groomName,
         weddingDate,
