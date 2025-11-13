@@ -2,17 +2,18 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IGuest extends Document {
   weddingId: mongoose.Types.ObjectId;
-  firstName: string;
-  lastName: string;
+  name: string;
   email?: string;
   phoneNumber?: string;
   category: 'family' | 'friends' | 'colleagues' | 'others';
-  plusOne: number;
   rsvpStatus: 'pending' | 'confirmed' | 'declined';
+  address: string;
+  plusOne: number;
   dietaryRestrictions?: string;
   seatingPreference?: string;
   notes?: string;
   addedBy: mongoose.Types.ObjectId;
+  isVIP: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,14 +24,9 @@ const guestSchema = new Schema<IGuest>({
     ref: 'Wedding',
     required: true
   },
-  firstName: {
+  name: {
     type: String,
-    required: [true, 'First name is required'],
-    trim: true
-  },
-  lastName: {
-    type: String,
-    required: [true, 'Last name is required'],
+    required: [true, 'Name is required'],
     trim: true
   },
   email: {
@@ -45,6 +41,10 @@ const guestSchema = new Schema<IGuest>({
   category: {
     type: String,
     enum: ['family', 'friends', 'colleagues', 'others'],
+    required: true
+  },  
+  address: {
+    type: String,
     required: true
   },
   plusOne: {
@@ -69,6 +69,10 @@ const guestSchema = new Schema<IGuest>({
   addedBy: {
     type: Schema.Types.ObjectId,
     ref: 'User'
+  },
+  isVIP: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

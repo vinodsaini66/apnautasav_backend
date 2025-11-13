@@ -25,16 +25,15 @@ export class GuestController {
         actionType: 'created',
         entityType: 'guest',
         entityId: String(guest._id),
-        entityName: `${guest.firstName} ${guest.lastName}`,
-        description: `Added guest: ${guest.firstName} ${guest.lastName}`
+        entityName: `${guest.name}`,
+        description: `Added guest: ${guest.name}`
       });
 
       const socketServer = getSocketServer();
       socketServer.emitToWedding(weddingId, 'guest:added', {
         guest: {
           id: guest._id,
-          firstName: guest.firstName,
-          lastName: guest.lastName,
+          name: guest.name,
           category: guest.category,
           rsvpStatus: guest.rsvpStatus
         },
@@ -109,8 +108,8 @@ export class GuestController {
         actionType: 'updated',
         entityType: 'guest',
         entityId: String(guest._id),
-        entityName: `${guest.firstName} ${guest.lastName}`,
-        description: `Updated guest: ${guest.firstName} ${guest.lastName}`
+        entityName: `${guest.name}`,
+        description: `Updated guest: ${guest.name}`
       });
 
       ApiResponse.success(res, 200, {
@@ -141,8 +140,8 @@ export class GuestController {
         userId: userId!,
         actionType: 'deleted',
         entityType: 'guest',
-        entityName: `${guest.firstName} ${guest.lastName}`,
-        description: `Deleted guest: ${guest.firstName} ${guest.lastName}`
+        entityName: `${guest.name}`,
+        description: `Deleted guest: ${guest.name}`
       });
 
       ApiResponse.success(res, 200, {
