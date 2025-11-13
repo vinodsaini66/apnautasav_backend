@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const createVendorSchema = z.object({
   body: z.object({
     vendorName: z.string().min(2).max(100),
-    category: z.enum(['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'other']),
+    category: z.enum(['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'others']),
     contactPerson: z.string().optional(),
     email: z.string().email().optional(),
     phoneNumber: z.string().min(10),
@@ -11,7 +11,7 @@ export const createVendorSchema = z.object({
     estimatedCost: z.number().positive(),
     actualCost: z.number().positive().optional(),
     bookingStatus: z.enum(['inquiry', 'negotiating', 'booked', 'confirmed', 'cancelled']).optional(),
-    negotiationNotes: z.string().optional(),
+    notes: z.string().optional(),
     contractUrl: z.string().url().optional(),
     paymentTerms: z.string().optional(),
     rating: z.number().min(0).max(5).optional(),

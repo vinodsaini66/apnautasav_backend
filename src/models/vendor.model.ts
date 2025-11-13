@@ -11,7 +11,7 @@ export interface IVendor extends Document {
   estimatedCost: number;
   actualCost?: number;
   bookingStatus: 'inquiry' | 'negotiating' | 'booked' | 'confirmed' | 'cancelled';
-  negotiationNotes?: string;
+  notes?: string;
   contractUrl?: string;
   paymentTerms?: string;
   addedBy: mongoose.Types.ObjectId;
@@ -34,7 +34,7 @@ const vendorSchema = new Schema<IVendor>({
   },
   category: {
     type: String,
-    enum: ['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'other'],
+    enum: ['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'others'],
     required: true
   },
   contactPerson: {
@@ -69,7 +69,7 @@ const vendorSchema = new Schema<IVendor>({
     enum: ['inquiry', 'negotiating', 'booked', 'confirmed', 'cancelled'],
     default: 'inquiry'
   },
-  negotiationNotes: {
+  notes: {
     type: String
   },
   contractUrl: {
