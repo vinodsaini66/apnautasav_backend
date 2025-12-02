@@ -7,18 +7,36 @@ import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
 import { generateInvitationCode } from '../utils/generateCode';
 import logger from '../utils/logger';
+import collaborationInvitation from '../models/collaborationInvitation';
 
 export class CollaboratorController {
+
   static async inviteCollaborator(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
       const userId = req.user?.userId;
-      const { phoneNumber, role } = req.body;
+
+      const { phoneNumber, role, name } = req.body;
 
       const user = await User.findOne({ phoneNumber });
 
       if (!user) {
-        ApiResponse.error(res, 404, 'User not found with this phone number');
+        const invitationCode = generateInvitationCode();
+
+        const invitation = await collaborationInvitation.create({
+          phoneNumber,
+          weddingId,
+          role: role || 'editor',
+          invitedBy: userId,
+          invitationCode,
+        });
+
+        await sendInvitationSms(phoneNumber, invitationCode);
+
+        ApiResponse.success(res, 200, {
+          message: "User not registered. Invitation sent via SMS.",
+          data: invitation,
+        });
         return;
       }
 
@@ -36,6 +54,7 @@ export class CollaboratorController {
 
       const collaborator = await Collaborator.create({
         weddingId,
+        name,
         userId: user._id,
         role: role || 'editor',
         invitedBy: userId,
@@ -88,10 +107,12 @@ export class CollaboratorController {
         .lean();
 
       ApiResponse.success(res, 200, {
-        data: {
-          owner: wedding?.createdBy,
-          collaborators
-        }
+        data: collaborators,
+        // owner: wedding?.createdBy
+        // {
+        //   owner: wedding?.createdBy,
+        //   collaborators
+        // }
       });
     } catch (error: any) {
       logger.error('Get collaborators error:', error);
