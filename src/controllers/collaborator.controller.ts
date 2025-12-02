@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { Collaborator } from '../models/collaborator.model';
 import { User } from '../models/user.model';
-import { Wedding } from '../models/wedding.model';
+// import { Wedding } from '../models/wedding.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
