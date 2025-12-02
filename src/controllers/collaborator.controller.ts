@@ -102,9 +102,9 @@ export class CollaboratorController {
         .sort({ joinedAt: -1 })
         .lean();
 
-      const wedding = await Wedding.findById(weddingId)
-        .populate('createdBy', 'fullName email phoneNumber')
-        .lean();
+      // const wedding = await Wedding.findById(weddingId)
+      //   .populate('createdBy', 'fullName email phoneNumber')
+      //   .lean();
 
       ApiResponse.success(res, 200, {
         data: collaborators,
