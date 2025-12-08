@@ -13,7 +13,7 @@ export class WeddingController {
   static async createWedding(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.userId;
-      const { brideName, groomName, weddingDate, location, totalBudget, currency, description, imageUrl,name } = req.body;
+      const { brideName, groomName, weddingDate, location, totalBudget, currency, description, imageUrl, name } = req.body;
 
       const weddingCode = generateWeddingCode();
 
@@ -108,6 +108,15 @@ export class WeddingController {
         .populate('createdBy', 'fullName email phoneNumber')
         .lean();
 
+      const [totalGuest, totalTask, spent] = await Promise.all([
+        Guest.countDocuments({ weddingId }),
+        Task.countDocuments({ weddingId }),
+        Budget.aggregate([
+          { $match: { weddingId: weddingId as any, status: 'paid' } },
+          { $group: { _id: null, total: { $sum: '$actualCost' } } }
+        ]).then(result => result[0]?.total || 0)
+      ]); // Placeholder for any future parallel operations
+
       if (!wedding) {
         ApiResponse.error(res, 404, 'Wedding not found');
         return;
@@ -124,7 +133,8 @@ export class WeddingController {
       ApiResponse.success(res, 200, {
         data: {
           ...wedding,
-          collaborators
+          collaborators,
+          totalGuest, totalTask, spent
         }
       });
     } catch (error: any) {

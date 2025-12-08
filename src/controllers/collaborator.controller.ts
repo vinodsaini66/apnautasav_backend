@@ -8,6 +8,7 @@ import { NotificationService } from '../services/notification.service';
 import { generateInvitationCode } from '../utils/generateCode';
 import logger from '../utils/logger';
 import collaborationInvitation from '../models/collaborationInvitation';
+import { sendInvitationSms } from '../helpers/function';
 
 export class CollaboratorController {
 

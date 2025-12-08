@@ -8,7 +8,7 @@ export const createBudgetSchema = z.object({
     actualCost: z.number().positive().optional(),
     vendor: z.string().optional(),
     status: z.enum(['estimated', 'approved', 'paid', 'pending']).optional(),
-    paymentDate: z.string().date().optional(),
+    paymentDate: z.coerce.date().optional(),
     currency: z.string().optional(),
     notes: z.string().optional()
   })
@@ -22,7 +22,7 @@ export const updateBudgetSchema = z.object({
     actualCost: z.number().positive().optional(),
     vendor: z.string().optional(),
     status: z.enum(['estimated', 'approved', 'paid', 'pending']).optional(),
-    paymentDate: z.string().date().optional(),
+    paymentDate: z.coerce.date().optional(),
     currency: z.string().optional(),
     notes: z.string().optional()
   })

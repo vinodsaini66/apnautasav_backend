@@ -1,15 +1,17 @@
 import jwt from 'jsonwebtoken';
 import { User } from '../models/user.model';
-import { generateOTP } from '../utils/generateCode';
+import { generateInvitationCode, generateOTP } from '../utils/generateCode';
 import { TokenPayload } from '../types';
 import logger from '../utils/logger';
+import collaborationInvitation from '../models/collaborationInvitation';
+import { Collaborator } from '../models/collaborator.model';
 
 export class AuthService {
   static async sendOTP(phoneNumber: string): Promise<{ success: boolean; message: string }> {
     try {
       const otp = process.env.NODE_ENV === 'development'
-    ? '123456'
-    : generateOTP(6);
+        ? '123456'
+        : generateOTP(6);
 
       const otpExpiry = new Date(Date.now() + parseInt(process.env.OTP_EXPIRY_MINUTES || '10') * 60 * 1000);
 
@@ -79,6 +81,33 @@ export class AuthService {
 
     await user.save();
 
+    if (phoneNumber) {
+      const invitations = await collaborationInvitation.find({
+        phoneNumber,
+      });
+      if (invitations.length > 0) {
+        invitations.forEach(async (invitation) => {
+          const invitationCode = generateInvitationCode();
+          await Collaborator.create({
+            weddingId: invitation.weddingId,
+            name: fullName,
+            userId: user._id,
+            role: invitation.role,
+            invitedBy: invitation.invitedBy,
+            invitationCode,
+            invitationStatus: 'accepted',
+            permissions: {
+              canEdit: invitation.role === 'editor' || invitation.role === 'admin',
+              canDelete: invitation.role === 'admin',
+              canInvite: invitation.role === 'admin',
+              canManageMembers: invitation.role === 'admin'
+            }
+          });
+          await collaborationInvitation.findByIdAndDelete(invitation._id);
+        });
+      }
+    }
+
     const token = this.generateToken(user);
     const refreshToken = this.generateRefreshToken(user);
 
@@ -104,7 +133,7 @@ export class AuthService {
 
     return jwt.sign(payload, process.env.JWT_SECRET as string, {
       expiresIn: (process.env.JWT_EXPIRES_IN || '1h') as string
-    } as jwt.SignOptions );
+    } as jwt.SignOptions);
   }
 
   static generateRefreshToken(user: any): string {
