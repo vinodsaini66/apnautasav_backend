@@ -10,7 +10,7 @@ import logger from './utils/logger';
 import routes from './routes';
 import { errorMiddleware } from './middleware/error.middleware';
 import { loggingMiddleware } from './middleware/logging.middleware';
-import { rateLimitMiddleware } from './middleware/rateLimit.middleware';
+// import { rateLimitMiddleware } from './middleware/rateLimit.middleware';
 import mongoose from 'mongoose';
 import { initializeSocket } from './config/socket';
 import { createServer } from 'http';
