@@ -2,6 +2,7 @@ import { Response } from 'express';
 
 interface ApiResponseData {
   message?: string;
+  status?: boolean;
   data?: any;
   meta?: any;
 }

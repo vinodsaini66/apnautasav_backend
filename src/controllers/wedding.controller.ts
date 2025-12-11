@@ -8,6 +8,7 @@ import { generateWeddingCode } from '../utils/generateCode';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import logger from '../utils/logger';
+import mongoose from 'mongoose';
 
 export class WeddingController {
   static async createWedding(req: Request, res: Response): Promise<void> {
@@ -112,7 +113,7 @@ export class WeddingController {
         Guest.countDocuments({ weddingId }),
         Task.countDocuments({ weddingId }),
         Budget.aggregate([
-          { $match: { weddingId: weddingId as any, status: 'paid' } },
+          { $match: { weddingId: new mongoose.Types.ObjectId(weddingId as any), status: 'paid' } },
           { $group: { _id: null, total: { $sum: '$actualCost' } } }
         ]).then(result => result[0]?.total || 0)
       ]); // Placeholder for any future parallel operations

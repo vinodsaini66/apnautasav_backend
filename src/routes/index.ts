@@ -10,10 +10,12 @@ import activityRoutes from './activity.routes';
 import notificationRoutes from './notification.routes';
 import commentRoutes from './comment.routes';
 import noteRoutes from './note.routes';
+import userRoutes from './user.routes';
 
 const router: Router = Router();
 
 router.use('/auth', authRoutes);
+router.use('/me', userRoutes);
 router.use('/weddings', weddingRoutes);
 router.use('/weddings', guestRoutes);
 router.use('/weddings', taskRoutes);
@@ -24,5 +26,6 @@ router.use('/weddings', activityRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/comments', commentRoutes);
 router.use('/weddings', noteRoutes);
+
 
 export default router;

@@ -48,7 +48,7 @@ app.use(mongoSanitize());
 app.use(loggingMiddleware);
 
 // Rate limiting
-app.use(rateLimitMiddleware);
+// app.use(rateLimitMiddleware);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
