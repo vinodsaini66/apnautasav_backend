@@ -2,14 +2,15 @@ import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { ApiResponse } from '../utils/apiResponse';
 import logger from '../utils/logger';
+import { clearAuthCookie, setAuthCookie } from '../helpers/function';
 
 export class AuthController {
   static async sendOTP(req: Request, res: Response): Promise<void> {
     try {
       const { phoneNumber } = req.body;
-      
+
       const result = await AuthService.sendOTP(phoneNumber);
-      
+
       ApiResponse.success(res, 200, {
         message: result.message
       });
@@ -22,9 +23,11 @@ export class AuthController {
   static async verifyOTP(req: Request, res: Response): Promise<void> {
     try {
       const { phoneNumber, otp, fullName, email } = req.body;
-      
+
       const result = await AuthService.verifyOTP(phoneNumber, otp, fullName, email);
-      
+
+      setAuthCookie(res, result.token);
+
       ApiResponse.success(res, 200, {
         message: 'OTP verified successfully',
         data: result
@@ -38,14 +41,14 @@ export class AuthController {
   static async refreshToken(req: Request, res: Response): Promise<void> {
     try {
       const { refreshToken } = req.body;
-      
+
       if (!refreshToken) {
         ApiResponse.error(res, 400, 'Refresh token is required');
         return;
       }
-      
+
       const result = await AuthService.refreshToken(refreshToken);
-      
+
       ApiResponse.success(res, 200, {
         message: 'Token refreshed successfully',
         data: result
@@ -61,7 +64,8 @@ export class AuthController {
       // In a real application, you might want to blacklist the token
       // or clear it from a token store 
       console.log(req);
-      
+      clearAuthCookie(res);
+
       ApiResponse.success(res, 200, {
         message: 'Logged out successfully'
       });
