@@ -14,6 +14,7 @@ import { loggingMiddleware } from './middleware/logging.middleware';
 import mongoose from 'mongoose';
 import { initializeSocket } from './config/socket';
 import { createServer } from 'http';
+import './cron/wedding';
 // Load environment variables
 dotenv.config();
 mongoose.set("debug", true);
