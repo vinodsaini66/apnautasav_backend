@@ -57,7 +57,7 @@ export class WeddingController {
   static async getWeddings(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.userId;
-      const { page = 1, limit = 20, status } = req.query;
+      const { page = 1, limit = 200, status } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
       const filter: any = {};
@@ -95,6 +95,28 @@ export class WeddingController {
       const total = allWeddings.length;
 
       ApiResponse.paginated(res, allWeddings, Number(page), Number(limit), total);
+    } catch (error: any) {
+      logger.error('Get weddings error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to fetch weddings');
+    }
+  }
+
+  static async getWeddingInvitation(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const { page = 1, limit = 200, } = req.query;
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const invitations = await Collaborator.find({
+        userId,
+        invitationStatus: 'pending'
+      }).populate('weddingId', 'name location brideName groomName weddingDate').sort({ createdAt: -1 })
+        .skip(skip).limit(Number(limit))
+        .lean();
+
+
+      ApiResponse.paginated(res, invitations, Number(page), Number(limit), invitations.length);
     } catch (error: any) {
       logger.error('Get weddings error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to fetch weddings');
@@ -170,6 +192,44 @@ export class WeddingController {
         entityId: String(wedding._id),
         entityName: `${wedding.brideName} & ${wedding.groomName}`,
         description: 'Updated wedding details'
+      });
+
+      ApiResponse.success(res, 200, {
+        message: 'Wedding updated successfully',
+        data: wedding
+      });
+    } catch (error: any) {
+      logger.error('Update wedding error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to update wedding');
+    }
+  }
+
+  static async updateWeddingInvitation(req: Request, res: Response): Promise<void> {
+    try {
+      const { inviteId } = req.params;
+      const userId = req.user?.userId;
+      const updateData = req.body;
+
+      const wedding = await Collaborator.findByIdAndUpdate(
+        inviteId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!wedding) {
+        ApiResponse.error(res, 404, 'Invitation not found');
+        return;
+      }
+
+      // Log activity
+      await ActivityService.logActivity({
+        weddingId: String(wedding._id),
+        userId: userId!,
+        actionType: 'updated',
+        entityType: 'invitation',
+        entityId: String(wedding._id),
+        entityName: `Invitation for wedding ${wedding.weddingId}`,
+        description: 'Updated invitation details'
       });
 
       ApiResponse.success(res, 200, {

@@ -12,6 +12,8 @@ router.use(authMiddleware);
 
 router.post('/', validate(createWeddingSchema), WeddingController.createWedding);
 router.get('/', WeddingController.getWeddings);
+router.get('/invitations', WeddingController.getWeddingInvitation);
+router.put('/invite/:inviteId', WeddingController.updateWeddingInvitation);
 router.get('/:weddingId', checkWeddingAccess, WeddingController.getWeddingById);
 router.put('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(updateWeddingSchema), WeddingController.updateWedding);
 router.delete('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), WeddingController.deleteWedding);
