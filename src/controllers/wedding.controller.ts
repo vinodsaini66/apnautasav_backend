@@ -208,7 +208,11 @@ export class WeddingController {
     try {
       const { inviteId } = req.params;
       const userId = req.user?.userId;
-      const updateData = req.body;
+      const updateData = {
+        invitationStatus : req.body.status ?? 'pending',
+      }
+      console.log({ updateData });
+
 
       const wedding = await Collaborator.findByIdAndUpdate(
         inviteId,
@@ -226,14 +230,14 @@ export class WeddingController {
         weddingId: String(wedding._id),
         userId: userId!,
         actionType: 'updated',
-        entityType: 'invitation',
+        entityType: 'collaborator',
         entityId: String(wedding._id),
-        entityName: `Invitation for wedding ${wedding.weddingId}`,
-        description: 'Updated invitation details'
+        entityName: `Collaborator for wedding ${wedding.weddingId}`,
+        description: 'Updated collaborator details'
       });
 
       ApiResponse.success(res, 200, {
-        message: 'Wedding updated successfully',
+        message: 'Collaborator updated successfully',
         data: wedding
       });
     } catch (error: any) {

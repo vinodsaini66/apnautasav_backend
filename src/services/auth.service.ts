@@ -95,7 +95,7 @@ export class AuthService {
             role: invitation.role,
             invitedBy: invitation.invitedBy,
             invitationCode,
-            invitationStatus: 'accepted',
+            invitationStatus: 'pending',
             permissions: {
               canEdit: invitation.role === 'editor' || invitation.role === 'admin',
               canDelete: invitation.role === 'admin',
