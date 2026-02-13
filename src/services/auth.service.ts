@@ -52,7 +52,8 @@ export class AuthService {
     phoneNumber: string,
     otp: string,
     fullName?: string,
-    email?: string
+    email?: string,
+    fcm_token?: string
   ): Promise<{ token: string; refreshToken: string; user: any }> {
     const user = await User.findOne({ phoneNumber }).select('+otp +otpExpiry');
 
@@ -75,6 +76,8 @@ export class AuthService {
     // Update user details if provided
     if (fullName) user.fullName = fullName;
     if (email) user.email = email;
+    if (fcm_token) user.fcm_token = fcm_token;
+
     user.isVerified = true;
     user.otp = undefined;
     user.otpExpiry = undefined;

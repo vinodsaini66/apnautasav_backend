@@ -22,9 +22,9 @@ export class AuthController {
 
   static async verifyOTP(req: Request, res: Response): Promise<void> {
     try {
-      const { phoneNumber, otp, fullName, email } = req.body;
+      const { phoneNumber, otp, fullName, email, fcm_token } = req.body;
 
-      const result = await AuthService.verifyOTP(phoneNumber, otp, fullName, email);
+      const result = await AuthService.verifyOTP(phoneNumber, otp, fullName, email, fcm_token);
 
       setAuthCookie(res, result.token);
 

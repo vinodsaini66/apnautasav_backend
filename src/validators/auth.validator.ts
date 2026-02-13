@@ -21,6 +21,9 @@ export const verifyOtpSchema = z.object({
       .optional(),
     email: z.string()
       .email('Invalid email format')
+      .optional(),
+    fcm_token: z.string()
+      .max(500, 'FCM token is too long')
       .optional()
   })
 });

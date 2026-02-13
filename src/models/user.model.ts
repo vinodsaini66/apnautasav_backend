@@ -4,6 +4,7 @@ export interface IUser extends Document {
   phoneNumber: string;
   fullName: string;
   email?: string;
+  fcm_token?: string;
   otp?: string;
   otpExpiry?: Date;
   isVerified: boolean;
@@ -31,6 +32,7 @@ const userSchema = new Schema<IUser>({
     minlength: [2, 'Name must be at least 2 characters long'],
     maxlength: [100, 'Name cannot exceed 100 characters']
   },
+  fcm_token:{type: String},
   email: {
     type: String,
     trim: true,
