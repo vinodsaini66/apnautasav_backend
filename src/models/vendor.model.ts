@@ -57,8 +57,6 @@ const vendorSchema = new Schema<IVendor>({
   },
   estimatedCost: {
     type: Number,
-    required: [true, 'Estimated cost is required'],
-    min: [0, 'Cost cannot be negative']
   },
   actualCost: {
     type: Number,

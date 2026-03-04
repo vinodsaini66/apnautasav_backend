@@ -45,7 +45,7 @@ const guestSchema = new Schema<IGuest>({
   },  
   address: {
     type: String,
-    required: true
+    // required: true
   },
   plusOne: {
     type: Number,

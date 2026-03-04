@@ -8,7 +8,7 @@ export const createVendorSchema = z.object({
     email: z.string().email().optional(),
     phoneNumber: z.string().min(10),
     website: z.string().url().optional(),
-    estimatedCost: z.number().positive(),
+    estimatedCost: z.number().positive().optional(),
     actualCost: z.number().positive().optional(),
     bookingStatus: z.enum(['inquiry', 'negotiating', 'booked', 'confirmed', 'cancelled']).optional(),
     notes: z.string().optional(),
