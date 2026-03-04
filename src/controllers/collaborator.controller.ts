@@ -96,8 +96,13 @@ export class CollaboratorController {
   static async getCollaborators(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
+      const { invitationStatus } = req.query;
+      const query: any = { weddingId };
+      if (invitationStatus) {
+        query.invitationStatus = invitationStatus;
+      }
 
-      const collaborators = await Collaborator.find({ weddingId })
+      const collaborators = await Collaborator.find({ ...query })
         .populate('userId', 'fullName email phoneNumber')
         .populate('invitedBy', 'fullName')
         .sort({ joinedAt: -1 })
