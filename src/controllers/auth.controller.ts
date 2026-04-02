@@ -7,9 +7,9 @@ import { clearAuthCookie, setAuthCookie } from '../helpers/function';
 export class AuthController {
   static async sendOTP(req: Request, res: Response): Promise<void> {
     try {
-      const { phoneNumber } = req.body;
+      const { email} = req.body;
 
-      const result = await AuthService.sendOTP(phoneNumber);
+      const result = await AuthService.sendOTP(email);
 
       ApiResponse.success(res, 200, {
         message: result.message

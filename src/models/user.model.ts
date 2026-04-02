@@ -1,9 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IUser extends Document {
-  phoneNumber: string;
+  phoneNumber?: string;
   fullName: string;
-  email?: string;
+  email: string;
   fcm_token?: string;
   otp?: string;
   otpExpiry?: Date;
@@ -20,10 +20,6 @@ export interface IUser extends Document {
 const userSchema = new Schema<IUser>({
   phoneNumber: {
     type: String,
-    required: [true, 'Phone number is required'],
-    unique: true,
-    trim: true,
-    match: [/^[0-9]{10,15}$/, 'Please provide a valid phone number']
   },
   fullName: {
     type: String,
@@ -37,7 +33,8 @@ const userSchema = new Schema<IUser>({
     type: String,
     trim: true,
     lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email']
+    required: [true, 'Email is required'],
+    unique: true,
   },
   otp: {
     type: String,
@@ -71,7 +68,7 @@ const userSchema = new Schema<IUser>({
 });
 
 // Indexes
-userSchema.index({ phoneNumber: 1 });
+
 userSchema.index({ email: 1 });
 
 export const User = mongoose.model<IUser>('User', userSchema);

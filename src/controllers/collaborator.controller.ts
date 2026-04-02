@@ -17,22 +17,22 @@ export class CollaboratorController {
       const { weddingId } = req.params;
       const userId = req.user?.userId;
 
-      const { phoneNumber, role, name } = req.body;
+      const { email, role, name } = req.body;
 
-      const user = await User.findOne({ phoneNumber });
+      const user = await User.findOne({ email });
 
       if (!user) {
         const invitationCode = generateInvitationCode();
 
         const invitation = await collaborationInvitation.create({
-          phoneNumber,
+          email,
           weddingId,
           role: role || 'editor',
           invitedBy: userId,
           invitationCode,
         });
 
-        await sendInvitationSms(phoneNumber, invitationCode);
+        await sendInvitationSms(email, invitationCode);
 
         ApiResponse.success(res, 200, {
           message: "User not registered. Invitation sent via SMS.",

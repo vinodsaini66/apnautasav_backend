@@ -7,7 +7,7 @@ import collaborationInvitation from '../models/collaborationInvitation';
 import { Collaborator } from '../models/collaborator.model';
 
 export class AuthService {
-  static async sendOTP(phoneNumber: string): Promise<{ success: boolean; message: string }> {
+  static async sendOTP(email: string): Promise<{ success: boolean; message: string }> {
     try {
       const otp = process.env.NODE_ENV === 'development'
         ? '123456'
@@ -15,7 +15,7 @@ export class AuthService {
 
       const otpExpiry = new Date(Date.now() + parseInt(process.env.OTP_EXPIRY_MINUTES || '10') * 60 * 1000);
 
-      let user = await User.findOne({ phoneNumber }).select('+otp +otpExpiry');
+      let user = await User.findOne({ email }).select('+otp +otpExpiry');
 
       if (user) {
         user.otp = otp;
@@ -23,7 +23,7 @@ export class AuthService {
         await user.save();
       } else {
         user = await User.create({
-          phoneNumber,
+          email,
           otp,
           otpExpiry,
           fullName: 'User', // Temporary name
@@ -33,7 +33,7 @@ export class AuthService {
 
       // TODO: Send OTP via Twilio/SMS service
       // For development, log the OTP
-      logger.info(`OTP for ${phoneNumber}: ${otp}`);
+      logger.info(`OTP for ${email}: ${otp}`);
 
       // In production, use Twilio or similar service
       // await this.sendSMS(phoneNumber, `Your wedding manager OTP is: ${otp}`);
@@ -55,7 +55,7 @@ export class AuthService {
     email?: string,
     fcm_token?: string
   ): Promise<{ token: string; refreshToken: string; user: any }> {
-    const user = await User.findOne({ phoneNumber }).select('+otp +otpExpiry');
+    const user = await User.findOne({ email }).select('+otp +otpExpiry');
 
     if (!user) {
       throw new Error('User not found');
@@ -76,6 +76,7 @@ export class AuthService {
     // Update user details if provided
     if (fullName) user.fullName = fullName;
     if (email) user.email = email;
+    if (phoneNumber) user.phoneNumber = phoneNumber;
     if (fcm_token) user.fcm_token = fcm_token;
 
     user.isVerified = true;
@@ -84,9 +85,9 @@ export class AuthService {
 
     await user.save();
 
-    if (phoneNumber) {
+    if (email) {
       const invitations = await collaborationInvitation.find({
-        phoneNumber,
+        email,
       });
       if (invitations.length > 0) {
         invitations.forEach(async (invitation) => {
