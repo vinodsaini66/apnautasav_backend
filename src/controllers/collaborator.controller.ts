@@ -27,9 +27,11 @@ export class CollaboratorController {
         const invitation = await collaborationInvitation.create({
           email,
           weddingId,
+          name,
           role: role || 'editor',
           invitedBy: userId,
           invitationCode,
+          invitationStatus: 'pending',
         });
 
         await sendInvitationSms(email, invitationCode);
@@ -119,6 +121,30 @@ export class CollaboratorController {
         //   owner: wedding?.createdBy,
         //   collaborators
         // }
+      });
+    } catch (error: any) {
+      logger.error('Get collaborators error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to fetch collaborators');
+    }
+  }
+
+  static async getInviteCollaborators(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const { status } = req.query;
+      const query: any = { weddingId, status: 'pending' };
+      if (status) {
+        query.status = status;
+      }
+
+      const collaborators = await collaborationInvitation.find({ ...query })
+        // .populate('userId', 'fullName email phoneNumber')
+        .populate('invitedBy', 'fullName')
+        .sort({ joinedAt: -1 })
+        .lean();
+
+      ApiResponse.success(res, 200, {
+        data: collaborators,
       });
     } catch (error: any) {
       logger.error('Get collaborators error:', error);

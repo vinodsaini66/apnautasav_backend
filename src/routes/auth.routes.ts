@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { validate } from '../middleware/validation.middleware';
 import { sendOtpSchema, verifyOtpSchema } from '../validators/auth.validator';
-import { authRateLimiter } from '../middleware/rateLimit.middleware';
+// import { authRateLimiter } from '../middleware/rateLimit.middleware';
 
 const router: Router = Router();
 
@@ -27,7 +27,9 @@ const router: Router = Router();
  *       200:
  *         description: OTP sent successfully
  */
-router.post('/send-otp', authRateLimiter, validate(sendOtpSchema), AuthController.sendOTP);
+router.post('/send-otp', 
+    // authRateLimiter,
+     validate(sendOtpSchema), AuthController.sendOTP);
 
 /**
  * @swagger
@@ -57,7 +59,9 @@ router.post('/send-otp', authRateLimiter, validate(sendOtpSchema), AuthControlle
  *       200:
  *         description: OTP verified successfully
  */
-router.post('/verify-otp', authRateLimiter, validate(verifyOtpSchema), AuthController.verifyOTP);
+router.post('/verify-otp', 
+    // authRateLimiter,
+     validate(verifyOtpSchema), AuthController.verifyOTP);
 
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', AuthController.logout);

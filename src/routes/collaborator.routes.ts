@@ -10,6 +10,7 @@ router.use(authMiddleware);
 
 router.post('/:weddingId/collaborators/invite', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), CollaboratorController.inviteCollaborator);
 router.get('/:weddingId/collaborators', checkWeddingAccess, CollaboratorController.getCollaborators);
+router.get('/:weddingId/collaborators/invitations', checkWeddingAccess, CollaboratorController.getInviteCollaborators);
 router.put('/:weddingId/collaborators/:collaboratorId', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), CollaboratorController.updateCollaborator);
 router.delete('/:weddingId/collaborators/:collaboratorId', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), CollaboratorController.removeCollaborator);
 
