@@ -11,6 +11,9 @@ import notificationRoutes from './notification.routes';
 import commentRoutes from './comment.routes';
 import noteRoutes from './note.routes';
 import userRoutes from './user.routes';
+import weddingVendorRoutes from './wedding-vendor.routes';
+import vendorAlbumRoutes from './vendor-album.routes';
+import vendorCategoryMappingRoutes from './vendor-category-mapping.routes';
 
 const router: Router = Router();
 
@@ -26,6 +29,9 @@ router.use('/weddings', activityRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/comments', commentRoutes);
 router.use('/weddings', noteRoutes);
+router.use('/wedding-vendors', weddingVendorRoutes);
+router.use('/wedding-vendors', vendorAlbumRoutes);
+router.use('/wedding-vendors', vendorCategoryMappingRoutes);
 
 
 export default router;
