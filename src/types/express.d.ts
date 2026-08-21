@@ -9,6 +9,7 @@ declare global {
         role: string;
       };
       weddingId?: string;
+      task?: any;
     }
   }
 }

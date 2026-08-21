@@ -7,12 +7,16 @@ export class ActivityController {
   static async getActivities(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const { page = 1, limit = 50 } = req.query;
+      const { page = 1, limit = 50, entityType, entityId } = req.query;
 
       const result = await ActivityService.getWeddingActivities(
         weddingId,
         Number(page),
-        Number(limit)
+        Number(limit),
+        {
+          entityType: entityType ? String(entityType) : undefined,
+          entityId: entityId ? String(entityId) : undefined
+        }
       );
 
       ApiResponse.paginated(

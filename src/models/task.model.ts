@@ -9,6 +9,8 @@ export interface ITask extends Document {
   status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
   dueDate?: Date;
   assignedTo: mongoose.Types.ObjectId[];
+  assignedBy?: mongoose.Types.ObjectId;
+  assignedAt?: Date;
   createdBy: mongoose.Types.ObjectId;
   estimatedHours?: number;
   actualHours?: number;
@@ -61,6 +63,13 @@ const taskSchema = new Schema<ITask>({
     type: Schema.Types.ObjectId,
     ref: 'User'
   }],
+  assignedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  assignedAt: {
+    type: Date
+  },
   createdBy: {
     type: Schema.Types.ObjectId,
     ref: 'User',

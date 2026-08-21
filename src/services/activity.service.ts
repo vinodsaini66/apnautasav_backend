@@ -29,17 +29,26 @@ export class ActivityService {
     }
   }
 
-  static async getWeddingActivities(weddingId: string, page: number = 1, limit: number = 50) {
+  static async getWeddingActivities(
+    weddingId: string,
+    page: number = 1,
+    limit: number = 50,
+    filters?: { entityType?: string; entityId?: string }
+  ) {
     const skip = (page - 1) * limit;
 
-    const activities = await Activity.find({ weddingId })
+    const query: any = { weddingId };
+    if (filters?.entityType) query.entityType = filters.entityType;
+    if (filters?.entityId) query.entityId = filters.entityId;
+
+    const activities = await Activity.find(query)
       .populate('userId', 'fullName email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
-    const total = await Activity.countDocuments({ weddingId });
+    const total = await Activity.countDocuments(query);
 
     return {
       activities,

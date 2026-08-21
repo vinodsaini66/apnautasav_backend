@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Task } from '../models/task.model';
+import { Collaborator } from '../models/collaborator.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
@@ -81,6 +82,7 @@ export class TaskController {
 
       const tasks = await Task.find(filter)
         .populate('assignedTo', 'fullName email')
+        .populate('assignedBy', 'fullName')
         .populate('createdBy', 'fullName')
         .sort({ dueDate: 1, priority: -1 })
         .skip(skip)
@@ -93,6 +95,34 @@ export class TaskController {
     } catch (error: any) {
       logger.error('Get tasks error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to fetch tasks');
+    }
+  }
+
+  // Tasks assigned to the current user within this wedding.
+  static async getMyTasks(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const userId = req.user?.userId;
+      const { page = 1, limit = 50 } = req.query;
+
+      const skip = (Number(page) - 1) * Number(limit);
+      const filter = { weddingId, assignedTo: userId };
+
+      const tasks = await Task.find(filter)
+        .populate('assignedTo', 'fullName email')
+        .populate('assignedBy', 'fullName')
+        .populate('createdBy', 'fullName')
+        .sort({ dueDate: 1, priority: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean();
+
+      const total = await Task.countDocuments(filter);
+
+      ApiResponse.paginated(res, tasks, Number(page), Number(limit), total);
+    } catch (error: any) {
+      logger.error('Get my tasks error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to fetch assigned tasks');
     }
   }
 
@@ -173,15 +203,42 @@ export class TaskController {
     }
   }
 
+  // Admin-only: assign a task to a single accepted collaborator of this wedding.
   static async assignTask(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId, taskId } = req.params;
       const userId = req.user?.userId;
       const { assignedTo } = req.body;
 
+      const collaborator = await Collaborator.findOne({
+        weddingId,
+        userId: assignedTo,
+        invitationStatus: 'accepted'
+      }).populate('userId', 'fullName');
+
+      if (!collaborator) {
+        ApiResponse.error(res, 400, 'Selected user is not an accepted collaborator on this wedding');
+        return;
+      }
+
+      const existingTask = await Task.findOne({ _id: taskId, weddingId });
+
+      if (!existingTask) {
+        ApiResponse.error(res, 404, 'Task not found');
+        return;
+      }
+
+      const previousAssignedTo = existingTask.assignedTo.map((id) => id.toString());
+
       const task = await Task.findOneAndUpdate(
         { _id: taskId, weddingId },
-        { $set: { assignedTo } },
+        {
+          $set: {
+            assignedTo: [assignedTo],
+            assignedBy: userId,
+            assignedAt: new Date()
+          }
+        },
         { new: true }
       );
 
@@ -190,10 +247,12 @@ export class TaskController {
         return;
       }
 
-      // Notify assigned users
+      const assigneeName = (collaborator.userId as any)?.fullName || 'the collaborator';
+
+      // Notify assigned user
       await NotificationService.notifyTaskAssignment(
         taskId,
-        assignedTo,
+        [assignedTo],
         userId!,
         weddingId,
         task.title
@@ -207,7 +266,20 @@ export class TaskController {
         entityType: 'task',
         entityId: String(task._id),
         entityName: task.title,
-        description: `Assigned task: ${task.title}`
+        description: `Assigned task "${task.title}" to ${assigneeName}`,
+        changes: {
+          field: 'assignedTo',
+          oldValue: previousAssignedTo,
+          newValue: [assignedTo]
+        }
+      });
+
+      const socketServer = getSocketServer();
+      socketServer.emitToWedding(weddingId, 'task:assigned', {
+        taskId: task._id,
+        assignedTo,
+        assignedBy: userId,
+        timestamp: new Date()
       });
 
       ApiResponse.success(res, 200, {
@@ -217,6 +289,73 @@ export class TaskController {
     } catch (error: any) {
       logger.error('Assign task error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to assign task');
+    }
+  }
+
+  // Update a task's status. Allowed for editors/admins/owner, or for the
+  // task's own assignee regardless of their base collaborator role
+  // (see checkTaskAssigneeOrPermission, which attaches req.task).
+  static async updateTaskStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const userId = req.user?.userId;
+      const { status, actualHours } = req.body;
+      const existingTask = req.task;
+
+      if (!existingTask) {
+        ApiResponse.error(res, 404, 'Task not found');
+        return;
+      }
+
+      const oldStatus = existingTask.status;
+
+      const update: any = { status };
+      if (actualHours !== undefined) update.actualHours = actualHours;
+      if (status === 'completed') update.completedAt = new Date();
+
+      const task = await Task.findOneAndUpdate(
+        { _id: existingTask._id, weddingId },
+        { $set: update },
+        { new: true }
+      )
+        .populate('assignedTo', 'fullName email')
+        .populate('assignedBy', 'fullName');
+
+      if (!task) {
+        ApiResponse.error(res, 404, 'Task not found');
+        return;
+      }
+
+      await ActivityService.logActivity({
+        weddingId,
+        userId: userId!,
+        actionType: 'updated',
+        entityType: 'task',
+        entityId: String(task._id),
+        entityName: task.title,
+        description: `Marked task "${task.title}" as ${status}`,
+        changes: {
+          field: 'status',
+          oldValue: oldStatus,
+          newValue: status
+        }
+      });
+
+      const socketServer = getSocketServer();
+      socketServer.emitToWedding(weddingId, 'task:status_changed', {
+        taskId: task._id,
+        status,
+        updatedBy: userId,
+        timestamp: new Date()
+      });
+
+      ApiResponse.success(res, 200, {
+        message: 'Task status updated successfully',
+        data: task
+      });
+    } catch (error: any) {
+      logger.error('Update task status error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to update task status');
     }
   }
 

@@ -27,3 +27,16 @@ export const updateTaskSchema = z.object({
     tags: z.array(z.string()).optional()
   })
 });
+
+export const assignTaskSchema = z.object({
+  body: z.object({
+    assignedTo: z.string().min(1, 'assignedTo is required')
+  })
+});
+
+export const updateTaskStatusSchema = z.object({
+  body: z.object({
+    status: z.enum(['pending', 'in-progress', 'completed', 'cancelled']),
+    actualHours: z.number().positive().optional()
+  })
+});

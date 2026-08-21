@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { Comment } from '../models/comment.model';
+import { Task } from '../models/task.model';
 import { ApiResponse } from '../utils/apiResponse';
+import { ActivityService } from '../services/activity.service';
 // import { NotificationService } from '../services/notification.service';
 import logger from '../utils/logger';
 
@@ -23,6 +25,30 @@ export class CommentController {
       // Notify relevant users
       // TODO: Get all users involved with this entity
       // await NotificationService.notifyComment(userId!, recipientIds, entityType, entityId, weddingId);
+
+      // Log activity so comments show up in the entity's activity trail
+      // (e.g. "what did the assigned collaborator do, and when").
+      try {
+        let entityName: string | undefined;
+        if (entityType === 'task') {
+          const task = await Task.findById(entityId).select('title').lean();
+          entityName = task?.title;
+        }
+
+        await ActivityService.logActivity({
+          weddingId,
+          userId: userId!,
+          actionType: 'commented',
+          entityType,
+          entityId: String(entityId),
+          entityName,
+          description: entityName
+            ? `Commented on task "${entityName}"`
+            : `Commented on ${entityType}`
+        });
+      } catch (activityError) {
+        logger.error('Failed to log comment activity:', activityError);
+      }
 
       ApiResponse.success(res, 201, {
         message: 'Comment added successfully',
