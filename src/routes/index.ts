@@ -15,6 +15,7 @@ import weddingVendorRoutes from './wedding-vendor.routes';
 import vendorAlbumRoutes from './vendor-album.routes';
 import vendorCategoryMappingRoutes from './vendor-category-mapping.routes';
 import vendorCategoryRoutes from './vendor-category.routes';
+import bannerRoutes from './banner.routes';
 
 const router: Router = Router();
 
@@ -34,6 +35,7 @@ router.use('/wedding-vendors', weddingVendorRoutes);
 router.use('/wedding-vendors', vendorAlbumRoutes);
 router.use('/wedding-vendors', vendorCategoryMappingRoutes);
 router.use('/vendor-categories', vendorCategoryRoutes);
+router.use('/banners', bannerRoutes);
 
 
 export default router;

@@ -106,6 +106,24 @@ export const checkPermission = (requiredRole: CollaboratorRole) => {
   };
 };
 
+/**
+ * Platform-level admin check (as opposed to `checkPermission`, which is
+ * scoped to a single wedding's collaborators). Used for content that isn't
+ * tied to any one wedding — e.g. promotional dashboard banners.
+ */
+export const requireAdmin = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (req.user?.role !== 'admin') {
+    ApiResponse.error(res, 403, ERROR_MESSAGES.FORBIDDEN);
+    return;
+  }
+
+  next();
+};
+
 // Like checkPermission, but also allows through a user who is the task's
 // assignee, regardless of their base collaborator role (e.g. a 'viewer' who
 // was assigned the task can still update it). Loads the Task once and
