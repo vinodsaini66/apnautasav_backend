@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { WeddingVendor } from '../models/wedding-vendor.model';
+import { VendorCategoryMapping } from '../models/vendor-category-mapping.model';
 import logger from '../utils/logger';
 
 export class WeddingVendorService {
@@ -94,6 +95,10 @@ export class WeddingVendorService {
       isVerified?: boolean;
       isFeatured?: boolean;
       isPremium?: boolean;
+      categoryId?: string;
+      minPrice?: number;
+      maxPrice?: number;
+      minRating?: number;
     }
   ) {
     try {
@@ -103,6 +108,38 @@ export class WeddingVendorService {
       const query: any = {
         isDeleted: false,
       };
+
+
+      /**
+       * Category Filter (via VendorCategoryMapping - vendors don't store
+       * their category directly, it's a many-to-many mapping)
+       */
+      if (filters?.categoryId) {
+        const vendorIds = await VendorCategoryMapping.find({
+          categoryId: filters.categoryId,
+          isActive: true,
+        }).distinct('vendorId');
+
+        query._id = { $in: vendorIds };
+      }
+
+
+      /**
+       * Budget Filter
+       */
+      if (filters?.minPrice !== undefined || filters?.maxPrice !== undefined) {
+        query['pricing.startingPrice'] = {};
+        if (filters.minPrice !== undefined) query['pricing.startingPrice'].$gte = filters.minPrice;
+        if (filters.maxPrice !== undefined) query['pricing.startingPrice'].$lte = filters.maxPrice;
+      }
+
+
+      /**
+       * Rating Filter
+       */
+      if (filters?.minRating !== undefined) {
+        query.rating = { $gte: filters.minRating };
+      }
 
 
       /**

@@ -71,6 +71,25 @@ export class NotificationController {
     }
   }
 
+  static async markAllAsRead(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+
+      const result = await Notification.updateMany(
+        { recipientId: userId, isRead: false },
+        { $set: { isRead: true, readAt: new Date() } }
+      );
+
+      ApiResponse.success(res, 200, {
+        message: 'All notifications marked as read',
+        data: { modifiedCount: result.modifiedCount }
+      });
+    } catch (error: any) {
+      logger.error('Mark all notifications as read error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to mark all notifications as read');
+    }
+  }
+
   static async deleteNotification(req: Request, res: Response): Promise<void> {
     try {
       const { notificationId } = req.params;

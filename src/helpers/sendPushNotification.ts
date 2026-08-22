@@ -1,4 +1,4 @@
-import admin from "../config/firebaseAdmin";
+import admin, { isFirebaseConfigured } from "../config/firebaseAdmin";
 
 export interface SendPushNotificationOptions {
     tokens: string | string[];
@@ -20,6 +20,10 @@ export const sendPushNotification = async ({
     data = {},
 }: SendPushNotificationOptions): Promise<SendPushNotificationResponse> => {
     try {
+        if (!isFirebaseConfigured) {
+            throw new Error("Firebase Admin is not configured (missing service account credentials) - push notification skipped");
+        }
+
         if (!tokens) {
             throw new Error("FCM token is required");
         }
@@ -62,7 +66,7 @@ export const sendPushNotification = async ({
  * 
  * 
  await sendPushNotification({
-  tokens: user.fcmToken,
+  tokens: user.fcm_token,
   title: "Shaadi Reminder 🎉",
   body: "Kal Mehendi ceremony hai!",
   data: {

@@ -61,6 +61,10 @@ export class WeddingVendorController {
                 isVerified,
                 isFeatured,
                 isPremium,
+                categoryId,
+                minPrice,
+                maxPrice,
+                minRating,
             } = req.query;
 
             const result =
@@ -75,6 +79,10 @@ export class WeddingVendorController {
                         isVerified: isVerified !== undefined ? isVerified === 'true' : undefined,
                         isFeatured: isFeatured !== undefined ? isFeatured === 'true' : undefined,
                         isPremium: isPremium !== undefined ? isPremium === 'true' : undefined,
+                        categoryId: categoryId as string,
+                        minPrice: minPrice !== undefined ? Number(minPrice) : undefined,
+                        maxPrice: maxPrice !== undefined ? Number(maxPrice) : undefined,
+                        minRating: minRating !== undefined ? Number(minRating) : undefined,
                     }
                 );
 

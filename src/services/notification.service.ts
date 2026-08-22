@@ -1,5 +1,7 @@
 import { Notification } from '../models/notification.model';
+import { User } from '../models/user.model';
 import { getSocketServer } from '../config/socket';
+import { sendPushNotification } from '../helpers/sendPushNotification';
 import mongoose from 'mongoose';
 import logger from '../utils/logger';
 
@@ -24,22 +26,62 @@ export class NotificationService {
         relatedEntityId: data.relatedEntityId ? new mongoose.Types.ObjectId(data.relatedEntityId) : undefined
       });
 
-      // Emit real-time notification via Socket.IO
+      // Deliver over exactly one channel, chosen by presence, so the same
+      // notification is never sent twice: Socket.IO while the recipient is
+      // online, FCM push while they're not. Persistence above already
+      // happened unconditionally, so history is never lost either way.
+      // If the socket server isn't reachable at all, fall back to treating
+      // the recipient as offline (attempt push) rather than throwing out of
+      // createNotification and losing delivery entirely.
+      let socketServer: ReturnType<typeof getSocketServer> | null = null;
+      let isOnline = false;
       try {
-        const socketServer = getSocketServer();
-        socketServer.emitToUser(data.recipientId, 'notification:new', {
-          id: notification._id,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          weddingId: notification.weddingId,
-          actionUrl: notification.actionUrl,
-          createdAt: notification.createdAt
-        });
-        
-        logger.info(`Real-time notification sent to user ${data.recipientId}`);
-      } catch (socketError) {
-        logger.warn('Socket notification failed, but saved to database:', socketError);
+        socketServer = getSocketServer();
+        isOnline = socketServer.isUserOnline(data.recipientId);
+      } catch (lookupError) {
+        logger.warn('Socket server unavailable, treating recipient as offline:', lookupError);
+      }
+
+      if (isOnline && socketServer) {
+        try {
+          socketServer.emitToUser(data.recipientId, 'notification:new', {
+            id: notification._id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            weddingId: notification.weddingId,
+            actionUrl: notification.actionUrl,
+            createdAt: notification.createdAt
+          });
+
+          logger.info(`Real-time notification sent to user ${data.recipientId}`);
+        } catch (socketError) {
+          logger.warn('Socket notification failed, but saved to database:', socketError);
+        }
+      } else {
+        try {
+          const user = await User.findById(data.recipientId).select('fcm_token');
+
+          if (user?.fcm_token) {
+            await sendPushNotification({
+              tokens: user.fcm_token,
+              title: notification.title,
+              body: notification.message,
+              data: {
+                notificationId: String(notification._id),
+                type: notification.type,
+                weddingId: String(notification.weddingId),
+                ...(notification.actionUrl ? { actionUrl: notification.actionUrl } : {})
+              }
+            });
+
+            logger.info(`Push notification sent to offline user ${data.recipientId}`);
+          } else {
+            logger.info(`User ${data.recipientId} is offline and has no fcm_token - notification saved to DB only`);
+          }
+        } catch (pushError) {
+          logger.warn('Push notification failed, but saved to database:', pushError);
+        }
       }
 
       logger.info(`Notification created for user ${data.recipientId}`);

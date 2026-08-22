@@ -7,6 +7,7 @@ const router: Router = Router();
 router.use(authMiddleware);
 
 router.get('/', NotificationController.getNotifications);
+router.put('/read-all', NotificationController.markAllAsRead);
 router.put('/:notificationId/read', NotificationController.markAsRead);
 router.delete('/:notificationId', NotificationController.deleteNotification);
 
