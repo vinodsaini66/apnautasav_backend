@@ -7,10 +7,48 @@ import { Budget } from '../models/budget.model';
 import { generateWeddingCode } from '../utils/generateCode';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
+import { PlanResolutionService } from '../services/plan-resolution.service';
 import logger from '../utils/logger';
 import mongoose from 'mongoose';
 
 export class WeddingController {
+  /**
+   * GET /:weddingId/plan — the effective plan/limits currently in force for
+   * this wedding plus current usage, resolved from the wedding OWNER's
+   * account (not the requester's, if they're only a collaborator). Powers
+   * usage bars and tab gating on the frontend.
+   */
+  static async getWeddingPlan(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+
+      const wedding = await Wedding.findById(weddingId).select('createdBy');
+      if (!wedding) {
+        ApiResponse.error(res, 404, 'Wedding not found');
+        return;
+      }
+
+      const [effective, usage] = await Promise.all([
+        PlanResolutionService.getEffectivePlanForWedding(String(wedding.createdBy), weddingId),
+        PlanResolutionService.getCurrentUsage(weddingId),
+      ]);
+
+      ApiResponse.success(res, 200, {
+        message: 'Wedding plan fetched successfully',
+        data: {
+          planKey: effective.planKey,
+          source: effective.source,
+          limits: effective.limits,
+          budgetEnabled: effective.budgetEnabled,
+          usage,
+        },
+      });
+    } catch (error: any) {
+      logger.error('Get wedding plan error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to fetch wedding plan');
+    }
+  }
+
   static async createWedding(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.userId;

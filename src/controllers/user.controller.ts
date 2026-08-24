@@ -2,8 +2,24 @@ import { Request, Response } from 'express';
 import { ApiResponse } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import { User } from '../models/user.model';
+import { PlanResolutionService } from '../services/plan-resolution.service';
 
 export class UserController {
+
+    /** GET /me/plan — account-level subscription status + wedding-creation cap. */
+    static async getMyAccountPlan(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user!.userId;
+            const summary = await PlanResolutionService.getAccountPlanSummary(userId);
+
+            ApiResponse.success(res, 200, {
+                data: summary
+            });
+        } catch (error: any) {
+            logger.error('Get account plan error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to fetch account plan');
+        }
+    }
 
     static async getProfile(req: Request, res: Response): Promise<void> {
         try {

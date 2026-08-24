@@ -8,6 +8,7 @@ const router: Router = Router();
 
 router.use(authMiddleware);
 router.get('/', UserController.getProfile);
+router.get('/plan', UserController.getMyAccountPlan);
 router.put('/fcm-token', validate(updateFcmTokenSchema), UserController.updateFcmToken);
 
 export default router;
