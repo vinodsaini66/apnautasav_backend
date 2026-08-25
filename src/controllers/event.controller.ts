@@ -1,12 +1,14 @@
 import { Request, Response } from 'express';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
-// import { NotificationService } from '../services/notification.service';
 import { getSocketServer } from '../config/socket';
 import logger from '../utils/logger';
 import mongoose from 'mongoose';
 import { WeddingEvent } from '../models/event.model';
 import { Guest } from '../models/guest.model';
+import { Vendor } from '../models/vendor.model';
+import { Task } from '../models/task.model';
+import { Budget } from '../models/budget.model';
 
 export class EventController {
     static async createEvent(req: Request, res: Response): Promise<void> {
@@ -15,8 +17,13 @@ export class EventController {
             const userId = req.user?.userId;
             const eventData = req.body;
 
-            // Validate date range
-            if (new Date(eventData.endDateTime) <= new Date(eventData.startDateTime)) {
+            // Only meaningful to check once both ends of the range are
+            // actually given — a function's date is often still undecided.
+            if (
+                eventData.startDateTime &&
+                eventData.endDateTime &&
+                new Date(eventData.endDateTime) <= new Date(eventData.startDateTime)
+            ) {
                 ApiResponse.error(res, 400, 'End date must be after start date');
                 return;
             }
@@ -25,8 +32,8 @@ export class EventController {
                 ...eventData,
                 weddingId,
                 createdBy: userId,
-                startDateTime: new Date(eventData.startDateTime),
-                endDateTime: new Date(eventData.endDateTime)
+                startDateTime: eventData.startDateTime ? new Date(eventData.startDateTime) : undefined,
+                endDateTime: eventData.endDateTime ? new Date(eventData.endDateTime) : undefined
             });
 
             // Log activity
@@ -35,8 +42,7 @@ export class EventController {
                 userId: userId!,
                 actionType: 'created',
                 entityType: 'event',
-                //@ts-ignore
-                entityId: event._id.toString(),
+                entityId: String(event._id),
                 entityName: event.title,
                 description: `Created event: ${event.title}`
             });
@@ -108,9 +114,6 @@ export class EventController {
 
             const events = await WeddingEvent.find(filter)
                 .populate('createdBy', 'fullName email')
-                // .populate('guests', 'firstName lastName rsvpStatus')
-                // .populate('vendors', 'vendorName category')
-                // .populate('tasks', 'title status')
                 .sort({ startDateTime: 1 })
                 .skip(skip)
                 .limit(Number(limit))
@@ -132,9 +135,10 @@ export class EventController {
             const event = await WeddingEvent.findOne({ _id: eventId, weddingId })
                 .populate('createdBy', 'fullName email phoneNumber')
                 .populate('updatedBy', 'fullName email')
-                .populate('guests', 'firstName lastName email phoneNumber rsvpStatus category')
-                .populate('vendors', 'vendorName category phoneNumber email')
+                .populate('guests', 'name email phoneNumber rsvpStatus category isVIP plusOne')
+                .populate('vendors', 'vendorName category phoneNumber email bookingStatus')
                 .populate('tasks', 'title status priority dueDate')
+                .populate('budgetItems', 'category description estimatedCost actualCost status')
                 .lean();
 
             if (!event) {
@@ -190,8 +194,7 @@ export class EventController {
                 userId: userId!,
                 actionType: 'updated',
                 entityType: 'event',
-                //@ts-ignore
-                entityId: event._id.toString(),
+                entityId: String(event._id),
                 entityName: event.title,
                 description: `Updated event: ${event.title}`
             });
@@ -231,6 +234,18 @@ export class EventController {
                 return;
             }
 
+            // Deleting a function only ever *untags* the shared entities
+            // pointing at it — guests, vendors, tasks, and budget items
+            // themselves are never touched. This is the one place the
+            // "optional link, not a duplicate list" architecture needs to
+            // actually clean up after itself.
+            await Promise.all([
+                Guest.updateMany({ weddingId, eventIds: event._id }, { $pull: { eventIds: event._id } }),
+                Vendor.updateMany({ weddingId, eventIds: event._id }, { $pull: { eventIds: event._id } }),
+                Task.updateMany({ weddingId, eventId: event._id }, { $unset: { eventId: 1 } }),
+                Budget.updateMany({ weddingId, eventId: event._id }, { $unset: { eventId: 1 } })
+            ]);
+
             // Log activity
             await ActivityService.logActivity({
                 weddingId,
@@ -268,6 +283,12 @@ export class EventController {
             const userId = req.user?.userId;
             const { guestIds } = req.body;
 
+            const event = await WeddingEvent.findOne({ _id: eventId, weddingId });
+            if (!event) {
+                ApiResponse.error(res, 404, 'Event not found');
+                return;
+            }
+
             // Verify all guests belong to this wedding
             const guests = await Guest.find({
                 _id: { $in: guestIds },
@@ -279,22 +300,13 @@ export class EventController {
                 return;
             }
 
-            const event = await WeddingEvent.findOneAndUpdate(
-                { _id: eventId, weddingId },
-                {
-                    $addToSet: { guests: { $each: guestIds } },
-                    updatedBy: userId
-                },
-                { new: true }
-            ).populate('guests', 'firstName lastName email rsvpStatus');
-
-            if (!event) {
-                ApiResponse.error(res, 404, 'Event not found');
-                return;
-            }
-
-            // Send notifications to added guests
-            // TODO: Implement notification to guests
+            // The relationship lives on Guest.eventIds, not on the event —
+            // tag every guest with this event's id instead of trying to
+            // store a guest list on the event itself.
+            await Guest.updateMany(
+                { _id: { $in: guestIds }, weddingId },
+                { $addToSet: { eventIds: event._id } }
+            );
 
             // Log activity
             await ActivityService.logActivity({
@@ -302,15 +314,18 @@ export class EventController {
                 userId: userId!,
                 actionType: 'updated',
                 entityType: 'event',
-                //@ts-ignore
-                entityId: event._id.toString(),
+                entityId: String(event._id),
                 entityName: event.title,
                 description: `Added ${guestIds.length} guest(s) to event: ${event.title}`
             });
 
+            const updatedEvent = await WeddingEvent.findById(event._id)
+                .populate('guests', 'name email phoneNumber rsvpStatus category')
+                .lean();
+
             ApiResponse.success(res, 200, {
                 message: 'Guests added to event successfully',
-                data: event
+                data: updatedEvent
             });
         } catch (error: any) {
             logger.error('Add guests to event error:', error);
@@ -321,25 +336,29 @@ export class EventController {
     static async removeGuestFromEvent(req: Request, res: Response): Promise<void> {
         try {
             const { weddingId, eventId, guestId } = req.params;
-            const userId = req.user?.userId;
 
-            const event = await WeddingEvent.findOneAndUpdate(
-                { _id: eventId, weddingId },
-                {
-                    $pull: { guests: guestId },
-                    updatedBy: userId
-                },
-                { new: true }
-            );
-
+            const event = await WeddingEvent.findOne({ _id: eventId, weddingId });
             if (!event) {
                 ApiResponse.error(res, 404, 'Event not found');
                 return;
             }
 
+            // Untags the guest from this function — the guest record itself
+            // (and any other function they're invited to) is untouched.
+            const guest = await Guest.findOneAndUpdate(
+                { _id: guestId, weddingId },
+                { $pull: { eventIds: event._id } },
+                { new: true }
+            );
+
+            if (!guest) {
+                ApiResponse.error(res, 404, 'Guest not found');
+                return;
+            }
+
             ApiResponse.success(res, 200, {
                 message: 'Guest removed from event successfully',
-                data: event
+                data: guest
             });
         } catch (error: any) {
             logger.error('Remove guest from event error:', error);
@@ -347,6 +366,11 @@ export class EventController {
         }
     }
 
+    // Wedding-wide overview across all functions — event-level metadata
+    // only (status/type breakdown, planning target totals, upcoming
+    // count). Per-function guest/vendor/task/budget rollups belong to
+    // getEventStatsById below, since summing those across functions would
+    // double-count a guest invited to more than one.
     static async getEventStats(req: Request, res: Response): Promise<void> {
         try {
             const { weddingId } = req.params;
@@ -369,10 +393,7 @@ export class EventController {
                         cancelled: {
                             $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
                         },
-                        totalInvited: { $sum: '$invitedCount' },
-                        totalConfirmed: { $sum: '$confirmedCount' },
-                        totalBudget: { $sum: '$budget.estimated' },
-                        totalActual: { $sum: '$budget.actual' }
+                        totalEstimatedBudget: { $sum: { $ifNull: ['$estimatedBudget', 0] } }
                     }
                 }
             ]);
@@ -387,7 +408,8 @@ export class EventController {
                 }
             ]);
 
-            // Get upcoming events count
+            // Get upcoming events count (undated "TBD" events never match
+            // this $gte comparison, so they're correctly excluded)
             const upcomingCount = await WeddingEvent.countDocuments({
                 weddingId,
                 startDateTime: { $gte: new Date() },
@@ -402,10 +424,7 @@ export class EventController {
                         confirmed: 0,
                         completed: 0,
                         cancelled: 0,
-                        totalInvited: 0,
-                        totalConfirmed: 0,
-                        totalBudget: 0,
-                        totalActual: 0
+                        totalEstimatedBudget: 0
                     },
                     byType: eventTypeStats,
                     upcoming: upcomingCount
@@ -413,6 +432,78 @@ export class EventController {
             });
         } catch (error: any) {
             logger.error('Get event stats error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to fetch event statistics');
+        }
+    }
+
+    // Per-function drill-down: guests invited/confirmed, budget target vs.
+    // live spend, vendor count, task progress — everything the Event
+    // Detail page's stat row needs, always computed fresh from the shared
+    // collections rather than read off stored counters.
+    static async getEventStatsById(req: Request, res: Response): Promise<void> {
+        try {
+            const { weddingId, eventId } = req.params;
+
+            const event = await WeddingEvent.findOne({ _id: eventId, weddingId }).lean();
+            if (!event) {
+                ApiResponse.error(res, 404, 'Event not found');
+                return;
+            }
+
+            const eventObjectId = new mongoose.Types.ObjectId(eventId);
+            const weddingObjectId = new mongoose.Types.ObjectId(weddingId);
+
+            const [guestStats, vendorCount, taskStats, budgetTotals] = await Promise.all([
+                Guest.aggregate([
+                    { $match: { weddingId: weddingObjectId, eventIds: eventObjectId } },
+                    {
+                        $group: {
+                            _id: null,
+                            invited: { $sum: 1 },
+                            invitedWithPlusOne: { $sum: { $add: [1, { $ifNull: ['$plusOne', 0] }] } },
+                            confirmed: { $sum: { $cond: [{ $eq: ['$rsvpStatus', 'confirmed'] }, 1, 0] } },
+                            declined: { $sum: { $cond: [{ $eq: ['$rsvpStatus', 'declined'] }, 1, 0] } },
+                            pending: { $sum: { $cond: [{ $eq: ['$rsvpStatus', 'pending'] }, 1, 0] } }
+                        }
+                    }
+                ]),
+                Vendor.countDocuments({ weddingId, eventIds: eventId }),
+                Task.aggregate([
+                    { $match: { weddingId: weddingObjectId, eventId: eventObjectId } },
+                    {
+                        $group: {
+                            _id: null,
+                            total: { $sum: 1 },
+                            completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } }
+                        }
+                    }
+                ]),
+                Budget.aggregate([
+                    { $match: { weddingId: weddingObjectId, eventId: eventObjectId } },
+                    {
+                        $group: {
+                            _id: null,
+                            totalEstimated: { $sum: '$estimatedCost' },
+                            totalActual: { $sum: { $ifNull: ['$actualCost', 0] } }
+                        }
+                    }
+                ])
+            ]);
+
+            ApiResponse.success(res, 200, {
+                data: {
+                    guests: guestStats[0] || { invited: 0, invitedWithPlusOne: 0, confirmed: 0, declined: 0, pending: 0 },
+                    vendors: { count: vendorCount },
+                    tasks: taskStats[0] ? { total: taskStats[0].total, completed: taskStats[0].completed } : { total: 0, completed: 0 },
+                    budget: {
+                        target: event.estimatedBudget || 0,
+                        estimated: budgetTotals[0]?.totalEstimated || 0,
+                        spent: budgetTotals[0]?.totalActual || 0
+                    }
+                }
+            });
+        } catch (error: any) {
+            logger.error('Get event stats by id error:', error);
             ApiResponse.error(res, 500, error.message || 'Failed to fetch event statistics');
         }
     }
@@ -430,7 +521,7 @@ export class EventController {
                 .sort({ startDateTime: 1 })
                 .limit(Number(limit))
                 .populate('createdBy', 'fullName')
-                .select('title eventType startDateTime endDateTime location.venueName status invitedCount confirmedCount')
+                .select('title eventType startDateTime endDateTime location dressCode status estimatedBudget')
                 .lean();
 
             ApiResponse.success(res, 200, { data: events });
@@ -449,20 +540,26 @@ export class EventController {
                 status: { $ne: 'cancelled' }
             })
                 .sort({ startDateTime: 1 })
-                .select('title eventType startDateTime endDateTime location.venueName status')
+                .select('title eventType startDateTime endDateTime location dressCode status')
                 .lean();
 
-            // Group by date
-            const timeline = events.reduce((acc: any, event: any) => {
-                const date = event.startDateTime.toISOString().split('T')[0];
-                if (!acc[date]) {
-                    acc[date] = [];
-                }
-                acc[date].push(event);
-                return acc;
-            }, {});
+            // Group by date — events with no date yet ("Date TBD") can't be
+            // placed on a calendar, so they get their own bucket instead of
+            // crashing the group-by on a null date.
+            const timeline: Record<string, any[]> = {};
+            const unscheduled: any[] = [];
 
-            ApiResponse.success(res, 200, { data: timeline });
+            for (const event of events) {
+                if (!event.startDateTime) {
+                    unscheduled.push(event);
+                    continue;
+                }
+                const date = new Date(event.startDateTime).toISOString().split('T')[0];
+                if (!timeline[date]) timeline[date] = [];
+                timeline[date].push(event);
+            }
+
+            ApiResponse.success(res, 200, { data: { timeline, unscheduled } });
         } catch (error: any) {
             logger.error('Get event timeline error:', error);
             ApiResponse.error(res, 500, error.message || 'Failed to fetch event timeline');

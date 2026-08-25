@@ -76,7 +76,12 @@ const startServer = async () => {
   try {
     await connectDatabase();
 
-    app.listen(PORT, () => {
+    // Must listen on `httpServer` (the one Socket.IO was attached to above),
+    // not `app.listen(...)` — Express's own .listen() wraps `app` in a
+    // second, separate http.Server that never has Socket.IO's upgrade
+    // handling attached, so every /socket.io/* request 404s even though
+    // the SocketServer log line above claims it's configured.
+    httpServer.listen(PORT, () => {
       logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
       logger.info(`API Documentation available at http://localhost:${PORT}/api-docs`);
     });

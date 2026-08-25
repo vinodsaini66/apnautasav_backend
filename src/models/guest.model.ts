@@ -14,6 +14,10 @@ export interface IGuest extends Document {
   notes?: string;
   addedBy: mongoose.Types.ObjectId;
   isVIP: boolean;
+  // Which functions this guest is invited to (Mehendi, Sangeet, ...). Empty
+  // means "not yet tagged to a specific function" — a valid state, not an
+  // error; RSVP itself stays a single status for the whole wedding.
+  eventIds: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -73,7 +77,12 @@ const guestSchema = new Schema<IGuest>({
   isVIP: {
     type: Boolean,
     default: false
-  }
+  },
+  eventIds: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Event',
+    default: []
+  }]
 }, {
   timestamps: true
 });
@@ -82,5 +91,6 @@ const guestSchema = new Schema<IGuest>({
 guestSchema.index({ weddingId: 1 });
 guestSchema.index({ email: 1 });
 guestSchema.index({ phoneNumber: 1 });
+guestSchema.index({ eventIds: 1 });
 
 export const Guest = mongoose.model<IGuest>('Guest', guestSchema);

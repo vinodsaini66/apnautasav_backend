@@ -10,7 +10,8 @@ export const createTaskSchema = z.object({
     dueDate: z.string().date().optional(),
     assignedTo: z.array(z.string()).optional(),
     estimatedHours: z.number().positive().optional(),
-    tags: z.array(z.string()).optional()
+    tags: z.array(z.string()).optional(),
+    eventId: z.string().optional()
   })
 });
 
@@ -24,7 +25,8 @@ export const updateTaskSchema = z.object({
     dueDate: z.string().date().optional(),
     assignedTo: z.array(z.string()).optional(),
     estimatedHours: z.number().positive().optional(),
-    tags: z.array(z.string()).optional()
+    tags: z.array(z.string()).optional(),
+    eventId: z.string().optional()
   })
 });
 

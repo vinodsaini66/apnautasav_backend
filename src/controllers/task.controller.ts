@@ -70,7 +70,7 @@ export class TaskController {
   static async getTasks(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const { page = 1, limit = 50, status, priority, category, assignedTo } = req.query;
+      const { page = 1, limit = 50, status, priority, category, assignedTo, eventId } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
       const filter: any = { weddingId };
@@ -79,6 +79,7 @@ export class TaskController {
       if (priority) filter.priority = priority;
       if (category) filter.category = category;
       if (assignedTo) filter.assignedTo = assignedTo;
+      if (eventId) filter.eventId = eventId;
 
       const tasks = await Task.find(filter)
         .populate('assignedTo', 'fullName email')

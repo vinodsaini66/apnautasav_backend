@@ -18,6 +18,17 @@ import { PlanResolutionService } from '../services/plan-resolution.service';
 import logger from '../utils/logger';
 import mongoose from 'mongoose';
 
+const DEFAULT_FUNCTION_TITLES: Record<string, string> = {
+  mehendi: 'Mehendi',
+  haldi: 'Haldi',
+  sangeet: 'Sangeet',
+  reception: 'Reception',
+  engagement: 'Engagement',
+  cocktail: 'Cocktail',
+  ceremony: 'Ceremony',
+  other: 'Function'
+};
+
 export class WeddingController {
   /**
    * GET /:weddingId/plan — the effective plan/limits currently in force for
@@ -59,7 +70,7 @@ export class WeddingController {
   static async createWedding(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.userId;
-      const { brideName, groomName, weddingDate, location, totalBudget, currency, description, imageUrl, name } = req.body;
+      const { brideName, groomName, weddingDate, location, totalBudget, currency, description, imageUrl, name, functions } = req.body;
 
       const weddingCode = generateWeddingCode();
 
@@ -89,9 +100,35 @@ export class WeddingController {
         description: `Created wedding for ${brideName} and ${groomName}`
       });
 
+      // Optional "which functions are you planning?" onboarding step —
+      // bulk-creates the Mehendi/Haldi/Sangeet/Reception (etc.) Events
+      // alongside the wedding in one request. The main wedding day itself
+      // is deliberately NOT one of these — it stays the weddingDate/location
+      // fields above, so there's only ever one place that date lives.
+      let events: any[] = [];
+      if (Array.isArray(functions) && functions.length > 0) {
+        const docs = functions.map((fn: { eventType: string; title?: string; startDateTime?: string }) => {
+          const startDateTime = fn.startDateTime ? new Date(fn.startDateTime) : undefined;
+          return {
+            weddingId: wedding._id,
+            eventType: fn.eventType,
+            title: fn.title || DEFAULT_FUNCTION_TITLES[fn.eventType] || 'Function',
+            startDateTime,
+            // A sensible default window so the event isn't left with a
+            // start but no end — easy to adjust later from the Event
+            // detail page.
+            endDateTime: startDateTime ? new Date(startDateTime.getTime() + 4 * 60 * 60 * 1000) : undefined,
+            createdBy: userId,
+            status: 'planning'
+          };
+        });
+
+        events = await WeddingEvent.insertMany(docs);
+      }
+
       ApiResponse.success(res, 201, {
         message: 'Wedding created successfully',
-        data: wedding
+        data: { ...wedding.toObject(), events }
       });
     } catch (error: any) {
       logger.error('Create wedding error:', error);

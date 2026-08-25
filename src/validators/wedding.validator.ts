@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+// The wedding-creation flow's optional "which functions are you planning?"
+// step — bulk-creates the corresponding Events alongside the wedding in one
+// request. Dates are optional here too: a couple may know they're doing a
+// Mehendi before they've picked when.
+const weddingFunctionSchema = z.object({
+  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other']),
+  title: z.string().min(3).max(200).optional(),
+  startDateTime: z.string().datetime().optional()
+});
+
 export const createWeddingSchema = z.object({
   body: z.object({
     brideName: z.string().min(2).max(100),
@@ -10,7 +20,8 @@ export const createWeddingSchema = z.object({
     totalBudget: z.number().positive(),
     currency: z.enum(['INR', 'USD', 'EUR', 'GBP']).optional(),
     description: z.string().max(500).optional(),
-    imageUrl: z.string().url().optional()
+    imageUrl: z.string().url().optional(),
+    functions: z.array(weddingFunctionSchema).optional()
   })
 });
 

@@ -10,7 +10,8 @@ export const createBudgetSchema = z.object({
     status: z.enum(['estimated', 'approved', 'paid', 'pending']).optional(),
     paymentDate: z.coerce.date().optional(),
     currency: z.string().optional(),
-    notes: z.string().optional()
+    notes: z.string().optional(),
+    eventId: z.string().optional()
   })
 });
 
@@ -24,6 +25,7 @@ export const updateBudgetSchema = z.object({
     status: z.enum(['estimated', 'approved', 'paid', 'pending']).optional(),
     paymentDate: z.coerce.date().optional(),
     currency: z.string().optional(),
-    notes: z.string().optional()
+    notes: z.string().optional(),
+    eventId: z.string().optional()
   })
 });

@@ -17,6 +17,10 @@ export interface IVendor extends Document {
   addedBy: mongoose.Types.ObjectId;
   rating?: number;
   reviews?: string;
+  // Which functions this vendor serves (a photographer often shoots
+  // several). Empty means "serves the whole wedding" (a planner, an emcee),
+  // not "unassigned".
+  eventIds: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -88,7 +92,12 @@ const vendorSchema = new Schema<IVendor>({
   },
   reviews: {
     type: String
-  }
+  },
+  eventIds: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Event',
+    default: []
+  }]
 }, {
   timestamps: true
 });
@@ -97,5 +106,6 @@ const vendorSchema = new Schema<IVendor>({
 vendorSchema.index({ weddingId: 1 });
 vendorSchema.index({ category: 1 });
 vendorSchema.index({ bookingStatus: 1 });
+vendorSchema.index({ eventIds: 1 });
 
 export const Vendor = mongoose.model<IVendor>('Vendor', vendorSchema);

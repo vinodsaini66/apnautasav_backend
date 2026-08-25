@@ -5,11 +5,23 @@ export interface IEvent extends Document {
     title: string;
     description?: string;
     eventType: 'ceremony' | 'reception' | 'mehendi' | 'sangeet' | 'haldi' | 'engagement' | 'cocktail' | 'other';
-    startDateTime: Date;
-    endDateTime: Date;
+    // Optional: a couple often knows they're doing a Sangeet before they've
+    // picked a date or venue. Undated events show as "Date TBD" in the UI,
+    // sort last, and are excluded from upcoming/timeline queries.
+    startDateTime?: Date;
+    endDateTime?: Date;
+    location?: {
+        venueName?: string;
+        address?: string;
+        mapUrl?: string;
+    };
     dressCode?: string;
     status: 'planning' | 'confirmed' | 'completed' | 'cancelled';
     isPublic: boolean;
+    // Planning target for this function, compared against the live sum of
+    // Budget items tagged with this event's id (never stored — always
+    // computed, so the two numbers can't drift apart).
+    estimatedBudget?: number;
     reminders: {
         enabled: boolean;
         reminderTime: Date;
@@ -52,18 +64,25 @@ const eventSchema = new Schema<IEvent>({
     },
     startDateTime: {
         type: Date,
-        required: [true, 'Start date and time is required'],
         index: true
     },
     endDateTime: {
         type: Date,
-        required: [true, 'End date and time is required'],
         validate: {
             validator: function (this: IEvent, value: Date) {
+                // Only meaningful to compare once both ends of the range
+                // are actually set — an event can have just one, or
+                // neither, while its date is still undecided.
+                if (!value || !this.startDateTime) return true;
                 return value > this.startDateTime;
             },
             message: 'End date must be after start date'
         }
+    },
+    location: {
+        venueName: { type: String, trim: true, maxlength: 200 },
+        address: { type: String, trim: true, maxlength: 500 },
+        mapUrl: { type: String, trim: true }
     },
     dressCode: {
         type: String,
@@ -79,6 +98,10 @@ const eventSchema = new Schema<IEvent>({
     isPublic: {
         type: Boolean,
         default: true
+    },
+    estimatedBudget: {
+        type: Number,
+        min: [0, 'Budget cannot be negative']
     },
     reminders: [{
         enabled: {
@@ -126,13 +149,23 @@ eventSchema.virtual('durationHours').get(function (this: IEvent) {
     return 0;
 });
 
+// These don't store a back-reference on Event at all — Guest/Vendor/Task
+// each own the relationship (Guest.eventIds, Vendor.eventIds, Task.eventId),
+// so there's exactly one place the link can drift, not two. Virtual populate
+// lets the Event side still ask "who's invited to me?" without duplicating
+// the array. Works with .populate(...) whether or not the query is .lean().
+eventSchema.virtual('guests', { ref: 'Guest', localField: '_id', foreignField: 'eventIds' });
+eventSchema.virtual('vendors', { ref: 'Vendor', localField: '_id', foreignField: 'eventIds' });
+eventSchema.virtual('tasks', { ref: 'Task', localField: '_id', foreignField: 'eventId' });
+eventSchema.virtual('budgetItems', { ref: 'Budget', localField: '_id', foreignField: 'eventId' });
 
 eventSchema.methods.isUpcoming = function (this: IEvent) {
-    return this.startDateTime > new Date();
+    return !!this.startDateTime && this.startDateTime > new Date();
 };
 
 
 eventSchema.methods.isOngoing = function (this: IEvent) {
+    if (!this.startDateTime || !this.endDateTime) return false;
     const now = new Date();
     return this.startDateTime <= now && this.endDateTime >= now;
 };

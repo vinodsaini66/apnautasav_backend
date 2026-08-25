@@ -22,6 +22,9 @@ export interface ITask extends Document {
     fileName: string;
     uploadedBy: mongoose.Types.ObjectId;
   }[];
+  // Which function this task is for, if any — e.g. "book mehndi artist" vs.
+  // a wedding-wide task like "apply for marriage certificate" that has none.
+  eventId?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -101,7 +104,11 @@ const taskSchema = new Schema<ITask>({
       type: Schema.Types.ObjectId,
       ref: 'User'
     }
-  }]
+  }],
+  eventId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Event'
+  }
 }, {
   timestamps: true
 });
@@ -111,5 +118,6 @@ taskSchema.index({ weddingId: 1 });
 taskSchema.index({ status: 1 });
 taskSchema.index({ dueDate: 1 });
 taskSchema.index({ assignedTo: 1 });
+taskSchema.index({ eventId: 1 });
 
 export const Task = mongoose.model<ITask>('Task', taskSchema);

@@ -54,6 +54,13 @@ router.get(
     EventController.getEventById
 );
 
+// Get a single event's own stats (guests/vendors/tasks/budget rollup)
+router.get(
+    '/:weddingId/events/:eventId/stats',
+    checkWeddingAccess,
+    EventController.getEventStatsById
+);
+
 // Update event
 router.put(
     '/:weddingId/events/:eventId',

@@ -15,7 +15,8 @@ export const createVendorSchema = z.object({
     contractUrl: z.string().url().optional(),
     paymentTerms: z.string().optional(),
     rating: z.number().min(0).max(5).optional(),
-    reviews: z.string().optional()
+    reviews: z.string().optional(),
+    eventIds: z.array(z.string()).optional()
   })
 });
 
@@ -34,6 +35,7 @@ export const updateVendorSchema = z.object({
     contractUrl: z.string().url().optional(),
     paymentTerms: z.string().optional(),
     rating: z.number().min(0).max(5).optional(),
-    reviews: z.string().optional()
+    reviews: z.string().optional(),
+    eventIds: z.array(z.string()).optional()
   })
 });

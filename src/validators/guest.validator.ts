@@ -13,6 +13,7 @@ export const createGuestSchema = z.object({
     plusOne: z.number().min(0).optional(),
     dietaryRestrictions: z.string().optional(),
     seatingPreference: z.string().optional(),
+    eventIds: z.array(z.string()).optional(),
   })
 });
 
@@ -29,5 +30,6 @@ export const updateGuestSchema = z.object({
     plusOne: z.number().min(0).optional(),
     dietaryRestrictions: z.string().optional(),
     seatingPreference: z.string().optional(),
+    eventIds: z.array(z.string()).optional(),
   })
 });

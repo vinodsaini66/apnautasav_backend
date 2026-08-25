@@ -12,6 +12,9 @@ export interface IBudget extends Document {
   addedBy: mongoose.Types.ObjectId;
   currency: string;
   notes?: string;
+  // Which function this expense is for, if any (e.g. "Sangeet DJ fee").
+  // A wedding-wide line item like insurance or a planner's fee has none.
+  eventId?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,6 +67,10 @@ const budgetSchema = new Schema<IBudget>({
   },
   notes: {
     type: String
+  },
+  eventId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Event'
   }
 }, {
   timestamps: true
@@ -73,5 +80,6 @@ const budgetSchema = new Schema<IBudget>({
 budgetSchema.index({ weddingId: 1 });
 budgetSchema.index({ category: 1 });
 budgetSchema.index({ status: 1 });
+budgetSchema.index({ eventId: 1 });
 
 export const Budget = mongoose.model<IBudget>('Budget', budgetSchema);

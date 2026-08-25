@@ -55,13 +55,14 @@ export class GuestController {
   static async getGuests(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const { page = 1, limit = 50, category, rsvpStatus, search } = req.query;
+      const { page = 1, limit = 50, category, rsvpStatus, search, eventId } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
       const filter: any = { weddingId };
 
       if (category) filter.category = category;
       if (rsvpStatus) filter.rsvpStatus = rsvpStatus;
+      if (eventId) filter.eventIds = eventId;
       if (search) {
         filter.$or = [
           { name: { $regex: search, $options: 'i' } },

@@ -40,13 +40,14 @@ export class VendorController {
   static async getVendors(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const { page = 1, limit = 50, category, bookingStatus } = req.query;
+      const { page = 1, limit = 50, category, bookingStatus, eventId } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
       const filter: any = { weddingId };
 
       if (category) filter.category = category;
       if (bookingStatus) filter.bookingStatus = bookingStatus;
+      if (eventId) filter.eventIds = eventId;
 
       const vendors = await Vendor.find(filter)
         .populate('addedBy', 'fullName')

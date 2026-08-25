@@ -60,13 +60,14 @@ export class BudgetController {
     static async getBudgets(req: Request, res: Response): Promise<void> {
         try {
             const { weddingId } = req.params;
-            const { page = 1, limit = 50, category, status } = req.query;
+            const { page = 1, limit = 50, category, status, eventId } = req.query;
 
             const skip = (Number(page) - 1) * Number(limit);
             const filter: any = { weddingId };
 
             if (category) filter.category = category;
             if (status) filter.status = status;
+            if (eventId) filter.eventId = eventId;
 
             const budgets = await Budget.find(filter)
                 .populate('vendor', 'vendorName')
@@ -161,9 +162,16 @@ export class BudgetController {
     static async getBudgetAnalytics(req: Request, res: Response): Promise<void> {
         try {
             const { weddingId } = req.params;
+            const { eventId } = req.query;
+
+            // Optional ?eventId= scopes the whole breakdown to one function
+            // (e.g. "just Sangeet spend by category") instead of the whole
+            // wedding.
+            const matchStage: any = { weddingId: weddingId as any };
+            if (eventId) matchStage.eventId = eventId as any;
 
             const analytics = await Budget.aggregate([
-                { $match: { weddingId: weddingId as any } },
+                { $match: matchStage },
                 {
                     $group: {
                         _id: '$category',
@@ -184,7 +192,7 @@ export class BudgetController {
             ]);
 
             const totals = await Budget.aggregate([
-                { $match: { weddingId: weddingId as any } },
+                { $match: matchStage },
                 {
                     $group: {
                         _id: null,
