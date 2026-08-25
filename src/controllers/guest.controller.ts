@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Guest } from '../models/guest.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
+import { NotificationService } from '../services/notification.service';
 import logger from '../utils/logger';
 import { getSocketServer } from '../config/socket';
 
@@ -63,8 +64,7 @@ export class GuestController {
       if (rsvpStatus) filter.rsvpStatus = rsvpStatus;
       if (search) {
         filter.$or = [
-          { firstName: { $regex: search, $options: 'i' } },
-          { lastName: { $regex: search, $options: 'i' } },
+          { name: { $regex: search, $options: 'i' } },
           { email: { $regex: search, $options: 'i' } }
         ];
       }
@@ -90,6 +90,10 @@ export class GuestController {
       const userId = req.user?.userId;
       const updateData = req.body;
 
+      const previousGuest = updateData.rsvpStatus
+        ? await Guest.findOne({ _id: guestId, weddingId }).select('rsvpStatus').lean()
+        : null;
+
       const guest = await Guest.findOneAndUpdate(
         { _id: guestId, weddingId },
         { $set: updateData },
@@ -111,6 +115,20 @@ export class GuestController {
         entityName: `${guest.name}`,
         description: `Updated guest: ${guest.name}`
       });
+
+      // Notify the rest of the wedding team when an RSVP actually changed —
+      // guarded separately so a notification failure never blocks the
+      // update itself from succeeding.
+      if (previousGuest && previousGuest.rsvpStatus !== guest.rsvpStatus) {
+        try {
+          const recipientIds = await NotificationService.getWeddingRecipientIds(weddingId, userId);
+          if (recipientIds.length > 0) {
+            await NotificationService.notifyGuestRSVP(weddingId, recipientIds, guest.name, guest.rsvpStatus);
+          }
+        } catch (notifyError) {
+          logger.warn('Failed to send guest RSVP notification:', notifyError);
+        }
+      }
 
       ApiResponse.success(res, 200, {
         message: 'Guest updated successfully',

@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IComment extends Document {
   weddingId: mongoose.Types.ObjectId;
-  entityType: 'task' | 'guest' | 'budget' | 'vendor' | 'note';
+  entityType: 'task' | 'guest' | 'budget' | 'vendor' | 'note' | 'event';
   entityId: mongoose.Types.ObjectId;
   authorId: mongoose.Types.ObjectId;
   content: string;
@@ -26,7 +26,7 @@ const commentSchema = new Schema<IComment>({
   },
   entityType: {
     type: String,
-    enum: ['task', 'guest', 'budget', 'vendor', 'note'],
+    enum: ['task', 'guest', 'budget', 'vendor', 'note', 'event'],
     required: true
   },
   entityId: {

@@ -1,9 +1,10 @@
 import { env } from "../config/env";
 import { Response } from "express";
+import { SMSService } from "../services/sms.service";
 
 export async function sendInvitationSms(phoneNumber: string, invitationCode: string) {
-    console.log(`📩 SMS sent to ${phoneNumber}: Your invite code is ${invitationCode}`);
-    return true;
+    const message = `You've been invited to collaborate on a wedding on ApnaUtsav! Your invite code is ${invitationCode}.`;
+    return SMSService.sendSMS(phoneNumber, message);
 }
 
 export function setAuthCookie(res: Response, token: string) {

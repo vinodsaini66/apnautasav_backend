@@ -3,7 +3,7 @@ import { Comment } from '../models/comment.model';
 import { Task } from '../models/task.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
-// import { NotificationService } from '../services/notification.service';
+import { NotificationService } from '../services/notification.service';
 import logger from '../utils/logger';
 
 export class CommentController {
@@ -22,9 +22,17 @@ export class CommentController {
         attachments: attachments || []
       });
 
-      // Notify relevant users
-      // TODO: Get all users involved with this entity
-      // await NotificationService.notifyComment(userId!, recipientIds, entityType, entityId, weddingId);
+      // Notify the rest of the wedding team about the new comment. A failure
+      // here should never fail the comment itself, so it's isolated from
+      // the activity-logging try/catch below.
+      try {
+        const recipientIds = await NotificationService.getWeddingRecipientIds(weddingId, userId);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyComment(userId!, recipientIds, entityType, entityId, weddingId, content);
+        }
+      } catch (notifyError) {
+        logger.warn('Failed to send comment notification:', notifyError);
+      }
 
       // Log activity so comments show up in the entity's activity trail
       // (e.g. "what did the assigned collaborator do, and when").

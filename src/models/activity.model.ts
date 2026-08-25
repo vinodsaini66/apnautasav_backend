@@ -4,7 +4,7 @@ export interface IActivity extends Document {
   weddingId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   actionType: 'created' | 'updated' | 'deleted' | 'commented' | 'assigned' | 'member_joined';
-  entityType: 'guest' | 'task' | 'budget' | 'vendor' | 'collaborator' | 'note';
+  entityType: 'guest' | 'task' | 'budget' | 'vendor' | 'collaborator' | 'note' | 'wedding' | 'event';
   entityId?: mongoose.Types.ObjectId;
   entityName?: string;
   description: string;
@@ -34,7 +34,7 @@ const activitySchema = new Schema<IActivity>({
   },
   entityType: {
     type: String,
-    enum: ['guest', 'task', 'budget', 'vendor', 'collaborator', 'note','wedding'],
+    enum: ['guest', 'task', 'budget', 'vendor', 'collaborator', 'note', 'wedding', 'event'],
     required: true
   },
   entityId: {

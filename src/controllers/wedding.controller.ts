@@ -4,6 +4,13 @@ import { Collaborator } from '../models/collaborator.model';
 import { Guest } from '../models/guest.model';
 import { Task } from '../models/task.model';
 import { Budget } from '../models/budget.model';
+import { Vendor } from '../models/vendor.model';
+import { WeddingEvent } from '../models/event.model';
+import { SharedNote } from '../models/sharedNote.model';
+import { Comment } from '../models/comment.model';
+import { Activity } from '../models/activity.model';
+import { Notification } from '../models/notification.model';
+import CollaborationInvitation from '../models/collaborationInvitation';
 import { generateWeddingCode } from '../utils/generateCode';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
@@ -295,12 +302,20 @@ export class WeddingController {
         return;
       }
 
-      // Delete related data
+      // Delete related data — every collection that carries a weddingId,
+      // so deleting a wedding never leaves orphaned documents behind.
       await Promise.all([
         Guest.deleteMany({ weddingId }),
         Task.deleteMany({ weddingId }),
         Budget.deleteMany({ weddingId }),
-        Collaborator.deleteMany({ weddingId })
+        Collaborator.deleteMany({ weddingId }),
+        Vendor.deleteMany({ weddingId }),
+        WeddingEvent.deleteMany({ weddingId }),
+        SharedNote.deleteMany({ weddingId }),
+        Comment.deleteMany({ weddingId }),
+        Activity.deleteMany({ weddingId }),
+        Notification.deleteMany({ weddingId }),
+        CollaborationInvitation.deleteMany({ weddingId })
       ]);
 
       ApiResponse.success(res, 200, {

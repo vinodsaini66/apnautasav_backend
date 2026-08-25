@@ -2,7 +2,24 @@ import { Request, Response } from 'express';
 import { Budget } from '../models/budget.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
+import { NotificationService } from '../services/notification.service';
 import logger from '../utils/logger';
+
+async function notifyBudgetChange(
+    weddingId: string,
+    userId: string,
+    budgetCategory: string,
+    action: 'added' | 'updated' | 'deleted'
+): Promise<void> {
+    try {
+        const recipientIds = await NotificationService.getWeddingRecipientIds(weddingId, userId);
+        if (recipientIds.length > 0) {
+            await NotificationService.notifyBudgetUpdate(weddingId, recipientIds, userId, budgetCategory, action);
+        }
+    } catch (notifyError) {
+        logger.warn('Failed to send budget update notification:', notifyError);
+    }
+}
 
 export class BudgetController {
     static async createBudget(req: Request, res: Response): Promise<void> {
@@ -27,6 +44,8 @@ export class BudgetController {
                 entityName: budget.description,
                 description: `Added budget item: ${budget.description}`
             });
+
+            await notifyBudgetChange(weddingId, userId!, budget.category, 'added');
 
             ApiResponse.success(res, 201, {
                 message: 'Budget item added successfully',
@@ -94,6 +113,8 @@ export class BudgetController {
                 description: `Updated budget item: ${budget.description}`
             });
 
+            await notifyBudgetChange(weddingId, userId!, budget.category, 'updated');
+
             ApiResponse.success(res, 200, {
                 message: 'Budget item updated successfully',
                 data: budget
@@ -125,6 +146,8 @@ export class BudgetController {
                 entityName: budget.description,
                 description: `Deleted budget item: ${budget.description}`
             });
+
+            await notifyBudgetChange(weddingId, userId!, budget.category, 'deleted');
 
             ApiResponse.success(res, 200, {
                 message: 'Budget item deleted successfully'

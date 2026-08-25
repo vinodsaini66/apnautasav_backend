@@ -1,11 +1,34 @@
 import { Notification } from '../models/notification.model';
 import { User } from '../models/user.model';
+import { Wedding } from '../models/wedding.model';
+import { Collaborator } from '../models/collaborator.model';
 import { getSocketServer } from '../config/socket';
 import { sendPushNotification } from '../helpers/sendPushNotification';
 import mongoose from 'mongoose';
 import logger from '../utils/logger';
 
 export class NotificationService {
+  /**
+   * Everyone who should hear about an in-wedding change: the wedding owner
+   * plus every collaborator who has actually accepted their invite, minus
+   * whoever triggered the change (they don't need to be told about their
+   * own action). Centralized here so guest/budget/comment notifications
+   * (and any future ones) all reach the same audience the same way.
+   */
+  static async getWeddingRecipientIds(weddingId: string, excludeUserId?: string): Promise<string[]> {
+    const [wedding, collaborators] = await Promise.all([
+      Wedding.findById(weddingId).select('createdBy').lean(),
+      Collaborator.find({ weddingId, invitationStatus: 'accepted' }).select('userId').lean()
+    ]);
+
+    const recipientIds = new Set<string>();
+    if (wedding?.createdBy) recipientIds.add(String(wedding.createdBy));
+    collaborators.forEach((collaborator) => recipientIds.add(String(collaborator.userId)));
+    if (excludeUserId) recipientIds.delete(String(excludeUserId));
+
+    return Array.from(recipientIds);
+  }
+
   static async createNotification(data: {
     recipientId: string;
     weddingId: string;
@@ -221,8 +244,20 @@ export class NotificationService {
     rsvpStatus: string
   ) {
     const socketServer = getSocketServer();
-    console.log(userIds);
-    
+
+    const notifications = userIds.map(userId =>
+      this.createNotification({
+        recipientId: userId,
+        weddingId,
+        type: 'activity_alert',
+        title: 'Guest RSVP Updated',
+        message: `${guestName} ${rsvpStatus === 'confirmed' ? 'confirmed' : rsvpStatus === 'declined' ? 'declined' : 'is now pending on'} the invitation`,
+        relatedEntityType: 'guest'
+      })
+    );
+
+    await Promise.all(notifications);
+
     // Broadcast to wedding room
     socketServer.emitToWedding(weddingId, 'guest:rsvp_updated', {
       guestName,
