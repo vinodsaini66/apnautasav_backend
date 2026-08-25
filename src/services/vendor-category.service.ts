@@ -54,6 +54,7 @@ export class VendorCategoryService {
     filters?: {
       search?: string;
       parentId?: string;
+      topLevelOnly?: boolean;
       isActive?: boolean;
     }
   ) {
@@ -90,6 +91,11 @@ export class VendorCategoryService {
           new mongoose.Types.ObjectId(
             filters.parentId
           );
+      } else if (filters?.topLevelOnly) {
+        // Only categories with no parent (parentId: null) — e.g. the
+        // vendor enquiry form's category dropdown, which should offer
+        // "Venue"/"Photographers"/etc., not their sub-categories.
+        query.parentId = null;
       }
 
 

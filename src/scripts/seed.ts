@@ -4,6 +4,7 @@ dotenv.config();
 import mongoose from 'mongoose';
 import { connectDatabase } from '../config/database';
 import { Plan } from '../models/plan.model';
+import { VendorCategory } from '../models/vendor-category.model';
 import logger from '../utils/logger';
 
 // Idempotent — safe to run repeatedly (e.g. on every deploy). Upserts by
@@ -104,9 +105,161 @@ async function seedPlans(): Promise<void> {
   }
 }
 
+// --- Vendor categories -----------------------------------------------------
+// Two-level taxonomy (top-level category -> sub-categories), sourced from
+// the vendor directory's category list. `isActive`/`isDeleted` on every row
+// let an admin later disable a category or soft-delete it via the
+// VendorCategory admin API without a code change; `slug` is derived here
+// once and is otherwise immutable going forward.
+
+interface VendorCategorySeed {
+  name: string;
+  icon: string;
+  subCategories: string[];
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+const VENDOR_CATEGORY_SEEDS: VendorCategorySeed[] = [
+  {
+    name: 'Venue',
+    icon: '🏛️',
+    subCategories: [
+      'Banquet Halls',
+      'Marriage Garden / Lawns',
+      'Wedding Resorts',
+      'Small Function / Party Halls',
+      'Destination Wedding Venues',
+      'Kalyana Mandapams',
+      '4 Star & Above Hotels',
+      '5 Star Luxury Hotels',
+      'Wedding Farmhouses',
+    ],
+  },
+  { name: 'Photographers', icon: '📷', subCategories: ['Photographers'] },
+  {
+    name: 'Makeup',
+    icon: '💄',
+    subCategories: ['Bridal Makeup Artists', 'Family Makeup'],
+  },
+  {
+    name: 'Planning & Decor',
+    icon: '🎨',
+    subCategories: ['Wedding Planners', 'Decorators'],
+  },
+  { name: 'Virtual Planning', icon: '💻', subCategories: ['Virtual Planning'] },
+  { name: 'Mehndi', icon: '🌿', subCategories: ['Mehendi Artists'] },
+  {
+    name: 'Music & Dance',
+    icon: '🎵',
+    subCategories: ['DJs', 'Sangeet Choreographer', 'Wedding Entertainment'],
+  },
+  {
+    name: 'Invites & Gifts',
+    icon: '💌',
+    subCategories: ['Invitations', 'Favours', 'Trousseau Packers', 'Invitation Gifts', 'Mehndi Favours'],
+  },
+  {
+    name: 'Food',
+    icon: '🍽️',
+    subCategories: ['Catering Services', 'Cake', 'Chaat & Food Stalls', 'Bartenders'],
+  },
+  {
+    name: 'Pre Wedding Shoot',
+    icon: '📸',
+    subCategories: ['Pre Wedding Shoot Locations', 'Pre Wedding Photographers'],
+  },
+  {
+    name: 'Bridal Wear',
+    icon: '👗',
+    subCategories: [
+      'Bridal Lehengas',
+      'Kanjeevaram / Silk Sarees',
+      'Cocktail Gowns',
+      'Trousseau Sarees',
+      'Bridal Lehenga on Rent',
+    ],
+  },
+  {
+    name: 'Groom Wear',
+    icon: '🤵',
+    subCategories: ['Sherwani', 'Wedding Suits / Tuxes', 'Sherwani On Rent'],
+  },
+  {
+    name: 'Jewellery & Accessories',
+    icon: '💍',
+    subCategories: ['Jewellery', 'Flower Jewellery', 'Bridal Jewellery on Rent', 'Accessories'],
+  },
+  { name: 'Pandits', icon: '🕉️', subCategories: ['Wedding Pandits'] },
+  { name: 'Bridal Grooming', icon: '💅', subCategories: ['Beauty and Wellness'] },
+];
+
+async function seedVendorCategories(): Promise<void> {
+  let parentSortOrder = 0;
+
+  for (const category of VENDOR_CATEGORY_SEEDS) {
+    const parentSlug = slugify(category.name);
+
+    const parent = await VendorCategory.findOneAndUpdate(
+      { slug: parentSlug },
+      {
+        $setOnInsert: {
+          name: category.name,
+          slug: parentSlug,
+          parentId: null,
+          level: 0,
+          icon: category.icon,
+          sortOrder: parentSortOrder,
+          isActive: true,
+          isDeleted: false,
+        },
+      },
+      { upsert: true, new: true }
+    );
+    parentSortOrder += 1;
+
+    // A category whose only "sub-category" restates its own name (e.g.
+    // Photographers -> ["Photographers"]) doesn't need a separate child row
+    // — creating one would collide on the unique slug anyway.
+    const subCategories = category.subCategories.filter((sub) => sub !== category.name);
+
+    let childSortOrder = 0;
+    for (const subName of subCategories) {
+      const childSlug = slugify(subName);
+      await VendorCategory.findOneAndUpdate(
+        { slug: childSlug },
+        {
+          $setOnInsert: {
+            name: subName,
+            slug: childSlug,
+            parentId: parent!._id,
+            level: 1,
+            icon: category.icon,
+            sortOrder: childSortOrder,
+            isActive: true,
+            isDeleted: false,
+          },
+        },
+        { upsert: true, new: true }
+      );
+      childSortOrder += 1;
+    }
+
+    logger.info(`Vendor category seeded/verified: ${category.name} (+${subCategories.length} sub-categories)`);
+  }
+}
+
 async function main(): Promise<void> {
   await connectDatabase();
   await seedPlans();
+  await seedVendorCategories();
   logger.info('Seeding complete');
   await mongoose.disconnect();
   process.exit(0);

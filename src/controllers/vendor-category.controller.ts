@@ -5,6 +5,28 @@ import { VendorCategoryService } from '../services/vendor-category.service';
 
 export class VendorCategoryController {
 
+    /**
+     * Unauthenticated, active-only, top-level-only, unpaginated (100 is
+     * plenty for a dropdown) — for the public vendor enquiry form. Only
+     * parent categories (parentId: null) are offered, not sub-categories.
+     */
+    static async getPublicCategories(
+        _req: Request,
+        res: Response
+    ): Promise<void> {
+        try {
+            const result = await VendorCategoryService.getCategories(1, 100, { isActive: true, topLevelOnly: true });
+
+            ApiResponse.success(res, 200, {
+                message: 'Vendor categories fetched successfully',
+                data: result.categories,
+            });
+        } catch (error: any) {
+            logger.error('Get public vendor categories error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to fetch vendor categories');
+        }
+    }
+
     static async createCategory(
         req: Request,
         res: Response

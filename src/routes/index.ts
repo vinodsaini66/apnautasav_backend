@@ -18,6 +18,7 @@ import vendorCategoryRoutes from './vendor-category.routes';
 import bannerRoutes from './banner.routes';
 import planRoutes from './plan.routes';
 import purchaseRoutes from './purchase.routes';
+import vendorEnquiryRoutes from './vendor-enquiry.routes';
 
 const router: Router = Router();
 
@@ -40,6 +41,7 @@ router.use('/vendor-categories', vendorCategoryRoutes);
 router.use('/banners', bannerRoutes);
 router.use('/plans', planRoutes);
 router.use('/purchases', purchaseRoutes);
+router.use('/vendor-enquiries', vendorEnquiryRoutes);
 
 
 export default router;

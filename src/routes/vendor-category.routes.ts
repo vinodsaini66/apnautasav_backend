@@ -4,6 +4,14 @@ import { VendorCategoryController } from '../controllers/vendor-category.control
 
 const router: Router = Router();
 
+/**
+ * GET /vendor-categories/public
+ * Unauthenticated — feeds the "Business/Service Category" dropdown on the
+ * public landing-page vendor enquiry form. Deliberately ahead of
+ * authMiddleware below, mirroring GET /plans's public-catalog precedent.
+ */
+router.get('/public', VendorCategoryController.getPublicCategories);
+
 router.use(authMiddleware);
 
 router.post('/', VendorCategoryController.createCategory);
