@@ -430,7 +430,7 @@ export class WeddingController {
         Task.countDocuments({ weddingId, status: 'completed' }),
         Budget.countDocuments({ weddingId }),
         Budget.aggregate([
-          { $match: { weddingId: weddingId as any } },
+          { $match: { weddingId: new mongoose.Types.ObjectId(weddingId) } },
           { $group: { _id: null, total: { $sum: '$actualCost' } } }
         ])
       ]);

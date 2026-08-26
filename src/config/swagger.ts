@@ -970,6 +970,38 @@ const definition =
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "eventId": {
+                    "type": "string"
+                  },
+                  "reminderOffsetDays": {
+                    "type": "integer",
+                    "description": "Days before dueDate to send a due-date reminder",
+                    "example": 2
+                  },
+                  "recurrence": {
+                    "type": "object",
+                    "properties": {
+                      "frequency": {
+                        "type": "string",
+                        "enum": ["daily", "weekly", "monthly"]
+                      },
+                      "interval": {
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "endDate": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  },
+                  "dependsOn": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Task IDs this task depends on (frontend-only enforcement)"
                   }
                 }
               }
@@ -1148,6 +1180,38 @@ const definition =
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "eventId": {
+                    "type": "string"
+                  },
+                  "reminderOffsetDays": {
+                    "type": "integer",
+                    "description": "Days before dueDate to send a due-date reminder. Changing this or dueDate re-arms the reminder.",
+                    "example": 2
+                  },
+                  "recurrence": {
+                    "type": "object",
+                    "properties": {
+                      "frequency": {
+                        "type": "string",
+                        "enum": ["daily", "weekly", "monthly"]
+                      },
+                      "interval": {
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "endDate": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  },
+                  "dependsOn": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Task IDs this task depends on (frontend-only enforcement)"
                   }
                 }
               }
@@ -1326,6 +1390,190 @@ const definition =
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/tasks/{taskId}/subtasks": {
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Add a subtask to a task",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "example": "Confirm guest count with caterer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subtask added successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/tasks/{taskId}/subtasks/{subtaskId}": {
+      "patch": {
+        "tags": ["Tasks"],
+        "summary": "Update a subtask",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "completed": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subtask updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Task or subtask not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Tasks"],
+        "summary": "Delete a subtask",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subtask deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Task not found"

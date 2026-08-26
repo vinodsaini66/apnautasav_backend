@@ -4,6 +4,8 @@ import { Wedding } from '../models/wedding.model';
 import { Collaborator } from '../models/collaborator.model';
 import { getSocketServer } from '../config/socket';
 import { sendPushNotification } from '../helpers/sendPushNotification';
+import { SMSService } from './sms.service';
+import { EmailService } from './email.service';
 import mongoose from 'mongoose';
 import logger from '../utils/logger';
 
@@ -146,6 +148,74 @@ export class NotificationService {
       assignedTo: assignedUserIds,
       assignedBy,
       taskTitle,
+      timestamp: new Date()
+    });
+  }
+
+  // Due-date reminder (#24): mirrors notifyTaskAssignment's shape — one
+  // in-app notification per assignee (delivered via the same
+  // Socket.IO/FCM chokepoint as everything else), plus a wedding-room
+  // broadcast. On top of that, best-effort SMS/email direct to each
+  // assignee — each wrapped so a delivery failure never blocks the others
+  // or the main in-app notification.
+  static async notifyTaskDueReminder(
+    taskId: string,
+    assigneeIds: string[],
+    weddingId: string,
+    taskTitle: string,
+    dueDate: Date
+  ) {
+    const socketServer = getSocketServer();
+    const dueDateLabel = dueDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const notifications = assigneeIds.map((userId) =>
+      this.createNotification({
+        recipientId: userId,
+        weddingId,
+        type: 'task_due_reminder',
+        title: 'Task Due Soon',
+        message: `Task "${taskTitle}" is due on ${dueDateLabel}`,
+        relatedEntityType: 'task',
+        relatedEntityId: taskId,
+        actionUrl: `/weddings/${weddingId}/tasks/${taskId}`
+      })
+    );
+
+    await Promise.all(notifications);
+
+    // Best-effort SMS/email, independent of and never blocking the in-app
+    // notifications above.
+    const users = await User.find({ _id: { $in: assigneeIds } }).select('phoneNumber email fullName').lean();
+    await Promise.all(
+      users.map(async (user) => {
+        const smsMessage = `Reminder: task "${taskTitle}" is due on ${dueDateLabel}.`;
+        if (user.phoneNumber) {
+          try {
+            await SMSService.sendSMS(user.phoneNumber, smsMessage);
+          } catch (error) {
+            logger.warn(`Task due reminder SMS failed for user ${user._id}:`, error);
+          }
+        }
+        if (user.email) {
+          try {
+            await EmailService.sendMail(
+              user.email,
+              `Reminder: "${taskTitle}" is due soon`,
+              `<p>Hi ${user.fullName || ''},</p><p>Task <strong>${taskTitle}</strong> is due on ${dueDateLabel}.</p>`
+            );
+          } catch (error) {
+            logger.warn(`Task due reminder email failed for user ${user._id}:`, error);
+          }
+        }
+      })
+    );
+
+    // Broadcast to wedding room
+    socketServer.emitToWedding(weddingId, 'task:due_reminder', {
+      taskId,
+      assigneeIds,
+      taskTitle,
+      dueDate,
       timestamp: new Date()
     });
   }

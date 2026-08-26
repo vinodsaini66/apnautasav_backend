@@ -15,6 +15,7 @@ import mongoose from 'mongoose';
 import { initializeSocket } from './config/socket';
 import { createServer } from 'http';
 import './cron/wedding';
+import './cron/taskReminder';
 // Load environment variables
 dotenv.config();
 mongoose.set("debug", true);

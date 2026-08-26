@@ -4,7 +4,7 @@ export interface INotification extends Document {
   recipientId: mongoose.Types.ObjectId;
   weddingId: mongoose.Types.ObjectId;
   senderId?: mongoose.Types.ObjectId;
-  type: 'task_assigned' | 'comment_added' | 'member_invited' | 'budget_updated' | 'activity_alert';
+  type: 'task_assigned' | 'comment_added' | 'member_invited' | 'budget_updated' | 'activity_alert' | 'task_due_reminder';
   title: string;
   message: string;
   relatedEntityType?: string;
@@ -33,7 +33,7 @@ const notificationSchema = new Schema<INotification>({
   },
   type: {
     type: String,
-    enum: ['task_assigned', 'comment_added', 'member_invited', 'budget_updated', 'activity_alert'],
+    enum: ['task_assigned', 'comment_added', 'member_invited', 'budget_updated', 'activity_alert', 'task_due_reminder'],
     required: true
   },
   title: {

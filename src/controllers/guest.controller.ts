@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { Guest } from '../models/guest.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
@@ -175,9 +176,13 @@ export class GuestController {
   static async getGuestStats(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
+      // .aggregate() bypasses Mongoose's query-casting layer, so a bare
+      // string weddingId never matches the stored ObjectId — cast
+      // explicitly, matching the convention in event.controller.ts.
+      const weddingObjectId = new mongoose.Types.ObjectId(weddingId);
 
       const stats = await Guest.aggregate([
-        { $match: { weddingId: weddingId as any } },
+        { $match: { weddingId: weddingObjectId } },
         {
           $group: {
             _id: null,
@@ -197,7 +202,7 @@ export class GuestController {
       ]);
 
       const categoryStats = await Guest.aggregate([
-        { $match: { weddingId: weddingId as any } },
+        { $match: { weddingId: weddingObjectId } },
         {
           $group: {
             _id: '$category',

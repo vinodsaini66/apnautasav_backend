@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { Budget } from '../models/budget.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
@@ -169,8 +170,13 @@ export class BudgetController {
             // Optional ?eventId= scopes the whole breakdown to one function
             // (e.g. "just Sangeet spend by category") instead of the whole
             // wedding.
-            const matchStage: any = { weddingId: weddingId as any };
-            if (eventId) matchStage.eventId = eventId as any;
+            // .aggregate() talks to the raw MongoDB driver, not Mongoose's
+            // query layer — string ids are NOT auto-cast to ObjectId here
+            // (unlike Model.find()), so $match on a bare string silently
+            // matches nothing. Cast explicitly, matching the convention
+            // already used in event.controller.ts's aggregations.
+            const matchStage: any = { weddingId: new mongoose.Types.ObjectId(weddingId) };
+            if (eventId) matchStage.eventId = new mongoose.Types.ObjectId(eventId as string);
 
             const analytics = await Budget.aggregate([
                 { $match: matchStage },
