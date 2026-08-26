@@ -12,10 +12,7 @@ export const createVendorSchema = z.object({
     actualCost: z.number().positive().optional(),
     bookingStatus: z.enum(['inquiry', 'negotiating', 'booked', 'confirmed', 'cancelled']).optional(),
     notes: z.string().optional(),
-    contractUrl: z.string().url().optional(),
     paymentTerms: z.string().optional(),
-    rating: z.number().min(0).max(5).optional(),
-    reviews: z.string().optional(),
     eventIds: z.array(z.string()).optional()
   })
 });
@@ -23,7 +20,7 @@ export const createVendorSchema = z.object({
 export const updateVendorSchema = z.object({
   body: z.object({
     vendorName: z.string().min(2).max(100).optional(),
-    category: z.enum(['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'other']).optional(),
+    category: z.enum(['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'others']).optional(),
     contactPerson: z.string().optional(),
     email: z.string().email().optional(),
     phoneNumber: z.string().min(10).optional(),
@@ -32,10 +29,8 @@ export const updateVendorSchema = z.object({
     actualCost: z.number().positive().optional(),
     bookingStatus: z.enum(['inquiry', 'negotiating', 'booked', 'confirmed', 'cancelled']).optional(),
     negotiationNotes: z.string().optional(),
-    contractUrl: z.string().url().optional(),
+    notes: z.string().optional(),
     paymentTerms: z.string().optional(),
-    rating: z.number().min(0).max(5).optional(),
-    reviews: z.string().optional(),
     eventIds: z.array(z.string()).optional()
   })
 });

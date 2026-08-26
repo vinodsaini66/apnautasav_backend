@@ -8,12 +8,6 @@ export interface ICollaborator extends Document {
   invitedBy: mongoose.Types.ObjectId;
   invitationStatus: 'pending' | 'accepted' | 'rejected';
   invitationCode?: string;
-  permissions: {
-    canEdit: boolean;
-    canDelete: boolean;
-    canInvite: boolean;
-    canManageMembers: boolean;
-  };
   lastAccessedAt?: Date;
 }
 
@@ -48,24 +42,6 @@ const collaboratorSchema = new Schema<ICollaborator>({
   },
   invitationCode: {
     type: String
-  },
-  permissions: {
-    canEdit: {
-      type: Boolean,
-      default: true
-    },
-    canDelete: {
-      type: Boolean,
-      default: false
-    },
-    canInvite: {
-      type: Boolean,
-      default: false
-    },
-    canManageMembers: {
-      type: Boolean,
-      default: false
-    }
   },
   lastAccessedAt: {
     type: Date

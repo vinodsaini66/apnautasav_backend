@@ -494,23 +494,14 @@ const definition =
         }
       }
     },
-    "/weddings/{weddingId}/join": {
+    "/weddings/join": {
       "post": {
         "tags": ["Weddings"],
         "summary": "Join wedding with code",
+        "description": "Joins the wedding identified by weddingCode. Instant — no approval step. New collaborators are added with role 'viewer'.",
         "security": [
           {
             "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "weddingId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "requestBody": {
@@ -1371,7 +1362,7 @@ const definition =
                 "properties": {
                   "category": {
                     "type": "string",
-                    "enum": ["venue", "catering", "decoration", "photography", "music", "invitations", "logistics", "other"],
+                    "enum": ["venue", "catering", "decoration", "photography", "music", "invitations", "logistics", "others"],
                     "example": "catering"
                   },
                   "description": {
@@ -1467,7 +1458,7 @@ const definition =
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["venue", "catering", "decoration", "photography", "music", "invitations", "logistics", "other"]
+              "enum": ["venue", "catering", "decoration", "photography", "music", "invitations", "logistics", "others"]
             }
           },
           {
@@ -1529,7 +1520,7 @@ const definition =
                 "properties": {
                   "category": {
                     "type": "string",
-                    "enum": ["venue", "catering", "decoration", "photography", "music", "invitations", "logistics", "other"]
+                    "enum": ["venue", "catering", "decoration", "photography", "music", "invitations", "logistics", "others"]
                   },
                   "description": {
                     "type": "string"
@@ -1654,6 +1645,593 @@ const definition =
         }
       }
     },
+    "/weddings/{weddingId}/budget/{budgetId}/installments": {
+      "post": {
+        "tags": ["Budget"],
+        "summary": "Add an installment (payment plan entry) to a budget item",
+        "description": "Recomputes the budget item's actualCost/amountPaid from all of its installments after the add.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "budgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["label", "amount"],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "example": "First advance"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "example": 5000
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Installment added successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Budget item not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/budget/{budgetId}/installments/{installmentId}": {
+      "put": {
+        "tags": ["Budget"],
+        "summary": "Update an installment",
+        "description": "Recomputes the budget item's actualCost/amountPaid from all of its installments after the update.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "budgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "installmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "number"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["pending", "paid"]
+                  },
+                  "paidDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Installment updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Budget item or installment not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Budget"],
+        "summary": "Delete an installment",
+        "description": "Recomputes the budget item's actualCost/amountPaid from its remaining installments after the delete.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "budgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "installmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Installment deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Budget item or installment not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/budget/{budgetId}/receipts": {
+      "post": {
+        "tags": ["Budget"],
+        "summary": "Upload receipt/invoice documents for a budget item",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "budgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "Up to 5 files (PDF, DOC, DOCX, JPG or PNG, max 10MB each)"
+                  },
+                  "documentType": {
+                    "type": "string",
+                    "enum": ["receipt", "invoice", "other"],
+                    "default": "receipt"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Receipts uploaded successfully"
+          },
+          "400": {
+            "description": "No files provided"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Budget item not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/budget/{budgetId}/receipts/{documentId}": {
+      "delete": {
+        "tags": ["Budget"],
+        "summary": "Delete a budget receipt/invoice document",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "budgetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Budget item or receipt not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/gifts": {
+      "post": {
+        "tags": ["Gifts"],
+        "summary": "Add a gift/shagun entry",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["giverName", "amount"],
+                "properties": {
+                  "guestId": {
+                    "type": "string",
+                    "description": "Guest ID, if the giver is a tracked guest"
+                  },
+                  "giverName": {
+                    "type": "string",
+                    "example": "Sharma family"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "example": 5100
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "INR"
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "description": "Event ID, if the gift was given at a specific function"
+                  },
+                  "receivedDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gift added successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "get": {
+        "tags": ["Gifts"],
+        "summary": "Get all gifts",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of gifts fetched successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/gifts/{giftId}": {
+      "put": {
+        "tags": ["Gifts"],
+        "summary": "Update a gift",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "giftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guestId": {
+                    "type": "string"
+                  },
+                  "giverName": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "number"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "eventId": {
+                    "type": "string"
+                  },
+                  "receivedDate": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Gift updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Gift not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Gifts"],
+        "summary": "Delete a gift",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "giftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gift deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Gift not found"
+          }
+        }
+      }
+    },
     "/weddings/{weddingId}/vendors": {
       "post": {
         "tags": ["Vendors"],
@@ -1687,7 +2265,7 @@ const definition =
                   },
                   "category": {
                     "type": "string",
-                    "enum": ["catering", "photography", "decoration", "music", "venue", "invitations", "logistics", "other"],
+                    "enum": ["catering", "photography", "decoration", "music", "venue", "invitations", "logistics", "others"],
                     "example": "catering"
                   },
                   "contactPerson": {
@@ -1721,18 +2299,7 @@ const definition =
                   "negotiationNotes": {
                     "type": "string"
                   },
-                  "contractUrl": {
-                    "type": "string"
-                  },
                   "paymentTerms": {
-                    "type": "string"
-                  },
-                  "rating": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 5
-                  },
-                  "reviews": {
                     "type": "string"
                   }
                 }
@@ -1796,7 +2363,7 @@ const definition =
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["catering", "photography", "decoration", "music", "venue", "invitations", "logistics", "other"]
+              "enum": ["catering", "photography", "decoration", "music", "venue", "invitations", "logistics", "others"]
             }
           },
           {
@@ -1861,7 +2428,7 @@ const definition =
                   },
                   "category": {
                     "type": "string",
-                    "enum": ["catering", "photography", "decoration", "music", "venue", "invitations", "logistics", "other"]
+                    "enum": ["catering", "photography", "decoration", "music", "venue", "invitations", "logistics", "others"]
                   },
                   "contactPerson": {
                     "type": "string"
@@ -1888,18 +2455,7 @@ const definition =
                   "negotiationNotes": {
                     "type": "string"
                   },
-                  "contractUrl": {
-                    "type": "string"
-                  },
                   "paymentTerms": {
-                    "type": "string"
-                  },
-                  "rating": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 5
-                  },
-                  "reviews": {
                     "type": "string"
                   }
                 }
@@ -1963,6 +2519,375 @@ const definition =
           },
           "404": {
             "description": "Vendor not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/vendors/from-marketplace/{weddingVendorId}": {
+      "post": {
+        "tags": ["Vendors"],
+        "summary": "Add a vendor from the public marketplace directory",
+        "description": "Creates a wedding-scoped Vendor from an active WeddingVendor marketplace listing, links it via marketplaceVendorId, increments the listing's inquiryCount, and files a VendorInquiry.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "weddingVendorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": ["catering", "photography", "decoration", "music", "venue", "invitations", "logistics", "others"],
+                    "description": "Overrides the auto-detected category mapped from the marketplace listing's primary category"
+                  },
+                  "fullName": {
+                    "type": "string",
+                    "description": "Overrides the requesting user's name on the resulting inquiry"
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Overrides the requesting user's phone on the resulting inquiry"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Vendor added from marketplace successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Marketplace vendor not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/vendors/{vendorId}/contracts": {
+      "post": {
+        "tags": ["Vendors"],
+        "summary": "Upload contract/invoice documents for a vendor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vendorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "Up to 5 files (PDF, DOC, DOCX, JPG or PNG, max 10MB each)"
+                  },
+                  "documentType": {
+                    "type": "string",
+                    "enum": ["contract", "invoice", "other"],
+                    "default": "other"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Documents uploaded successfully"
+          },
+          "400": {
+            "description": "No files provided"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Vendor not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/vendors/{vendorId}/contracts/{documentId}": {
+      "delete": {
+        "tags": ["Vendors"],
+        "summary": "Delete a vendor contract/invoice document",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vendorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Vendor or document not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/vendors/{vendorId}/reviews": {
+      "post": {
+        "tags": ["Vendors"],
+        "summary": "Submit (or update) a review for a vendor",
+        "description": "Upserted on (vendorId, reviewerId) — one review per person per vendor. Recalculates the vendor's rating/reviewCount, and rolls up into the linked marketplace listing's rating if the vendor was added from the marketplace.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vendorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["rating"],
+                "properties": {
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "example": 5
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Review submitted successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Vendor not found"
+          }
+        }
+      },
+      "get": {
+        "tags": ["Vendors"],
+        "summary": "List reviews for a vendor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vendorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of reviews fetched successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/vendors/{vendorId}/reviews/{reviewId}": {
+      "delete": {
+        "tags": ["Vendors"],
+        "summary": "Delete a vendor review",
+        "description": "Only the review's own author, or a collaborator with editor/admin rights, may delete it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vendorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reviewId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review deleted successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Review not found"
           }
         }
       }
@@ -2096,23 +3021,6 @@ const definition =
                   "role": {
                     "type": "string",
                     "enum": ["admin", "editor", "viewer"]
-                  },
-                  "permissions": {
-                    "type": "object",
-                    "properties": {
-                      "canEdit": {
-                        "type": "boolean"
-                      },
-                      "canDelete": {
-                        "type": "boolean"
-                      },
-                      "canInvite": {
-                        "type": "boolean"
-                      },
-                      "canManageMembers": {
-                        "type": "boolean"
-                      }
-                    }
                   }
                 }
               }
@@ -2366,7 +3274,7 @@ const definition =
                 "properties": {
                   "entityType": {
                     "type": "string",
-                    "enum": ["task", "guest", "budget", "vendor", "note"],
+                    "enum": ["task", "guest", "budget", "vendor", "note", "event"],
                     "example": "task"
                   },
                   "entityId": {
@@ -2409,11 +3317,14 @@ const definition =
           },
           "403": {
             "description": "Forbidden"
+          },
+          "404": {
+            "description": "Referenced entity not found for this wedding"
           }
         }
       }
     },
-    "/{entityType}/{entityId}/comments": {
+    "/weddings/{weddingId}/comments/{entityType}/{entityId}": {
       "get": {
         "tags": ["Comments"],
         "summary": "Get comments for entity",
@@ -2424,12 +3335,20 @@ const definition =
         ],
         "parameters": [
           {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "entityType",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "enum": ["task", "guest", "budget", "vendor", "note"]
+              "enum": ["task", "guest", "budget", "vendor", "note", "event"]
             }
           },
           {
@@ -2463,13 +3382,22 @@ const definition =
           "200": {
             "description": "Comments fetched successfully"
           },
+          "400": {
+            "description": "Invalid entityType"
+          },
           "401": {
             "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Referenced entity not found for this wedding"
           }
         }
       }
     },
-    "/comments/{commentId}": {
+    "/weddings/{weddingId}/comments/{commentId}": {
       "put": {
         "tags": ["Comments"],
         "summary": "Edit comment",
@@ -2479,6 +3407,14 @@ const definition =
           }
         ],
         "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "commentId",
             "in": "path",
@@ -2515,6 +3451,9 @@ const definition =
           "401": {
             "description": "Unauthorized"
           },
+          "403": {
+            "description": "Forbidden"
+          },
           "404": {
             "description": "Comment not found or unauthorized"
           }
@@ -2529,6 +3468,14 @@ const definition =
           }
         ],
         "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "commentId",
             "in": "path",
@@ -2545,13 +3492,16 @@ const definition =
           "401": {
             "description": "Unauthorized"
           },
+          "403": {
+            "description": "Forbidden (not the author or a wedding admin)"
+          },
           "404": {
-            "description": "Comment not found or unauthorized"
+            "description": "Comment not found"
           }
         }
       }
     },
-    "/comments/{commentId}/like": {
+    "/weddings/{weddingId}/comments/{commentId}/like": {
       "post": {
         "tags": ["Comments"],
         "summary": "Like/Unlike comment",
@@ -2561,6 +3511,14 @@ const definition =
           }
         ],
         "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "commentId",
             "in": "path",
@@ -2576,6 +3534,9 @@ const definition =
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Comment not found"
@@ -2861,6 +3822,10 @@ const definition =
     {
       "name": "Budget",
       "description": "Budget tracking and analytics endpoints"
+    },
+    {
+      "name": "Gifts",
+      "description": "Gift/shagun tracking endpoints"
     },
     {
       "name": "Vendors",

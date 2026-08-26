@@ -6,7 +6,7 @@ const CollaborationInvitationSchema = new Schema(
     email: { type: String, required: true },
     name: { type: String, required: true },
     weddingId: { type: Schema.Types.ObjectId, ref: 'Wedding', required: true },
-    role: { type: String, enum: ['editor', 'admin'], default: 'editor' },
+    role: { type: String, enum: ['editor', 'admin', 'viewer'], default: 'editor' },
     invitationCode: { type: String, required: true },
     invitedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     status: {

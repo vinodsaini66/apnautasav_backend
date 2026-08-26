@@ -387,11 +387,13 @@ export class WeddingController {
         return;
       }
 
-      // Add as collaborator
+      // Add as collaborator. Join-by-code is instant (no approval step), so
+      // default to the least-privileged role — a wedding admin can promote
+      // the collaborator afterwards via the collaborator management screen.
       const collaborator = await Collaborator.create({
         weddingId: wedding._id,
         userId,
-        role: 'editor',
+        role: 'viewer',
         invitationStatus: 'accepted',
         joinedAt: new Date()
       });

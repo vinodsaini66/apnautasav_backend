@@ -62,13 +62,7 @@ export class CollaboratorController {
         role: role || 'editor',
         invitedBy: userId,
         invitationStatus: 'pending',
-        invitationCode,
-        permissions: {
-          canEdit: role === 'editor' || role === 'admin',
-          canDelete: role === 'admin',
-          canInvite: role === 'admin',
-          canManageMembers: role === 'admin'
-        }
+        invitationCode
       });
 
       await NotificationService.notifyMemberInvitation(
@@ -156,11 +150,10 @@ export class CollaboratorController {
     try {
       const { weddingId, collaboratorId } = req.params;
       const userId = req.user?.userId;
-      const { role, permissions } = req.body;
+      const { role } = req.body;
 
       const updateData: any = {};
       if (role) updateData.role = role;
-      if (permissions) updateData.permissions = permissions;
 
       const collaborator = await Collaborator.findOneAndUpdate(
         { _id: collaboratorId, weddingId },
@@ -178,7 +171,7 @@ export class CollaboratorController {
         userId: userId!,
         actionType: 'updated',
         entityType: 'collaborator',
-        description: `Updated collaborator role/permissions`
+        description: `Updated collaborator role`
       });
 
       ApiResponse.success(res, 200, {

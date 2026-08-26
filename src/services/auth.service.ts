@@ -99,13 +99,7 @@ export class AuthService {
             role: invitation.role,
             invitedBy: invitation.invitedBy,
             invitationCode,
-            invitationStatus: 'pending',
-            permissions: {
-              canEdit: invitation.role === 'editor' || invitation.role === 'admin',
-              canDelete: invitation.role === 'admin',
-              canInvite: invitation.role === 'admin',
-              canManageMembers: invitation.role === 'admin'
-            }
+            invitationStatus: 'pending'
           });
           await collaborationInvitation.findByIdAndDelete(invitation._id);
         });

@@ -3,8 +3,8 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IActivity extends Document {
   weddingId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
-  actionType: 'created' | 'updated' | 'deleted' | 'commented' | 'assigned' | 'member_joined';
-  entityType: 'guest' | 'task' | 'budget' | 'vendor' | 'collaborator' | 'note' | 'wedding' | 'event';
+  actionType: 'created' | 'updated' | 'deleted' | 'commented' | 'assigned' | 'member_joined' | 'reviewed';
+  entityType: 'guest' | 'task' | 'budget' | 'vendor' | 'collaborator' | 'note' | 'wedding' | 'event' | 'gift';
   entityId?: mongoose.Types.ObjectId;
   entityName?: string;
   description: string;
@@ -29,12 +29,12 @@ const activitySchema = new Schema<IActivity>({
   },
   actionType: {
     type: String,
-    enum: ['created', 'updated', 'deleted', 'commented', 'assigned', 'member_joined'],
+    enum: ['created', 'updated', 'deleted', 'commented', 'assigned', 'member_joined', 'reviewed'],
     required: true
   },
   entityType: {
     type: String,
-    enum: ['guest', 'task', 'budget', 'vendor', 'collaborator', 'note', 'wedding', 'event'],
+    enum: ['guest', 'task', 'budget', 'vendor', 'collaborator', 'note', 'wedding', 'event', 'gift'],
     required: true
   },
   entityId: {

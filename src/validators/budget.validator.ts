@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
+const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+
 export const createBudgetSchema = z.object({
   body: z.object({
     category: z.enum(['venue', 'decoration', 'catering', 'logistics', 'invitations', 'music', 'photography', 'others']),
     description: z.string().min(3).max(200),
     estimatedCost: z.number().positive(),
     actualCost: z.number().positive().optional(),
-    vendor: z.string().optional(),
+    vendor: z.string().regex(objectIdRegex, 'Invalid vendor id').optional(),
     status: z.enum(['estimated', 'approved', 'paid', 'pending']).optional(),
     paymentDate: z.coerce.date().optional(),
     currency: z.string().optional(),
@@ -21,7 +23,7 @@ export const updateBudgetSchema = z.object({
     description: z.string().min(3).max(200).optional(),
     estimatedCost: z.number().positive().optional(),
     actualCost: z.number().positive().optional(),
-    vendor: z.string().optional(),
+    vendor: z.string().regex(objectIdRegex, 'Invalid vendor id').optional(),
     status: z.enum(['estimated', 'approved', 'paid', 'pending']).optional(),
     paymentDate: z.coerce.date().optional(),
     currency: z.string().optional(),
