@@ -6,8 +6,18 @@ import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
 import { PlanResolutionService, UNLIMITED } from '../services/plan-resolution.service';
+import { sendExport, ExportColumn } from '../services/export.service';
 import logger from '../utils/logger';
 import { getSocketServer } from '../config/socket';
+
+const TASK_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'title', label: 'Title' },
+  { key: 'category', label: 'Category' },
+  { key: 'priority', label: 'Priority' },
+  { key: 'status', label: 'Status' },
+  { key: 'dueDate', label: 'Due Date' },
+  { key: 'assignedTo', label: 'Assigned To' }
+];
 
 // Recurring tasks (#25b): plain Date math, no new date-library dependency
 // (dayjs isn't used elsewhere in this codebase). Month arithmetic is done
@@ -692,6 +702,43 @@ export class TaskController {
     } catch (error: any) {
       logger.error('Delete subtask error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to delete subtask');
+    }
+  }
+
+  /**
+   * GET /:weddingId/tasks/export?format=csv|pdf — full (unpaginated) list
+   * for this wedding, using getTasks' own filters.
+   */
+  static async exportTasks(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const { status, priority, category, assignedTo, eventId, format } = req.query;
+
+      const filter: any = { weddingId };
+      if (status) filter.status = status;
+      if (priority) filter.priority = priority;
+      if (category) filter.category = category;
+      if (assignedTo) filter.assignedTo = assignedTo;
+      if (eventId) filter.eventId = eventId;
+
+      const tasks = await Task.find(filter)
+        .populate('assignedTo', 'fullName email')
+        .sort({ dueDate: 1, priority: -1 })
+        .lean();
+
+      const rows = tasks.map((t: any) => ({
+        title: t.title,
+        category: t.category,
+        priority: t.priority,
+        status: t.status,
+        dueDate: t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 10) : '',
+        assignedTo: (t.assignedTo || []).map((u: any) => u.fullName).filter(Boolean).join(', ')
+      }));
+
+      await sendExport(res, format as string, 'Task List', 'task-list', rows, TASK_EXPORT_COLUMNS);
+    } catch (error: any) {
+      logger.error('Export tasks error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to export tasks');
     }
   }
 }

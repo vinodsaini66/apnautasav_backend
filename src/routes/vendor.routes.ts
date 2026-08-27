@@ -22,6 +22,7 @@ router.post('/:weddingId/vendors/from-marketplace/:weddingVendorId', checkWeddin
 
 router.post('/:weddingId/vendors', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), checkResourceLimit('vendors'), validate(createVendorSchema), VendorController.createVendor);
 router.get('/:weddingId/vendors', checkWeddingAccess, VendorController.getVendors);
+router.get('/:weddingId/vendors/export', checkWeddingAccess, VendorController.exportVendors);
 router.put('/:weddingId/vendors/:vendorId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(updateVendorSchema), VendorController.updateVendor);
 router.delete('/:weddingId/vendors/:vendorId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), VendorController.deleteVendor);
 

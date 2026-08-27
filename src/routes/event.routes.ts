@@ -61,6 +61,13 @@ router.get(
     EventController.getEventStatsById
 );
 
+// Download this single event as a .ics file
+router.get(
+    '/:weddingId/events/:eventId/calendar.ics',
+    checkWeddingAccess,
+    EventController.getEventCalendar
+);
+
 // Update event
 router.put(
     '/:weddingId/events/:eventId',

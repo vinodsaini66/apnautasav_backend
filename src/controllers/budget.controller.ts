@@ -6,7 +6,18 @@ import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
 import { recalculateBudgetActual } from '../services/budget-installment.service';
 import { uploadBufferToS3, deleteObjectFromS3ByUrl } from '../config/s3';
+import { sendExport, ExportColumn } from '../services/export.service';
 import logger from '../utils/logger';
+
+const BUDGET_EXPORT_COLUMNS: ExportColumn[] = [
+    { key: 'category', label: 'Category' },
+    { key: 'description', label: 'Description' },
+    { key: 'estimatedCost', label: 'Estimated Cost' },
+    { key: 'actualCost', label: 'Actual Cost' },
+    { key: 'status', label: 'Status' },
+    { key: 'paymentDate', label: 'Payment Date' },
+    { key: 'vendor', label: 'Vendor' }
+];
 
 async function notifyBudgetChange(
     weddingId: string,
@@ -471,6 +482,42 @@ export class BudgetController {
         } catch (error: any) {
             logger.error('Delete budget receipt error:', error);
             ApiResponse.error(res, 500, error.message || 'Failed to delete receipt');
+        }
+    }
+
+    /**
+     * GET /:weddingId/budget/export?format=csv|pdf — full (unpaginated)
+     * list for this wedding, using getBudgets' own filters.
+     */
+    static async exportBudget(req: Request, res: Response): Promise<void> {
+        try {
+            const { weddingId } = req.params;
+            const { category, status, eventId, format } = req.query;
+
+            const filter: any = { weddingId };
+            if (category) filter.category = category;
+            if (status) filter.status = status;
+            if (eventId) filter.eventId = eventId;
+
+            const budgetItems = await Budget.find(filter)
+                .populate('vendor', 'vendorName')
+                .sort({ createdAt: -1 })
+                .lean();
+
+            const rows = budgetItems.map((b: any) => ({
+                category: b.category,
+                description: b.description,
+                estimatedCost: b.estimatedCost,
+                actualCost: b.actualCost ?? '',
+                status: b.status,
+                paymentDate: b.paymentDate ? new Date(b.paymentDate).toISOString().slice(0, 10) : '',
+                vendor: b.vendor?.vendorName || ''
+            }));
+
+            await sendExport(res, format as string, 'Budget', 'budget', rows, BUDGET_EXPORT_COLUMNS);
+        } catch (error: any) {
+            logger.error('Export budget error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to export budget');
         }
     }
 }

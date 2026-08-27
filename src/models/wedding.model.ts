@@ -14,6 +14,14 @@ export interface IWedding extends Document {
   status: 'planning' | 'ongoing' | 'completed';
   description?: string;
   imageUrl?: string;
+  // Public wedding website (#29) — when isPublic is true, GET
+  // /weddings/public/:publicSlug (and .../events) serve a curated,
+  // guest-safe subset of this document to unauthenticated visitors.
+  // publicSlug is only ever set once the wedding is made public at least
+  // once — sparse so many weddings can share `undefined` without violating
+  // the unique index.
+  isPublic: boolean;
+  publicSlug?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -80,6 +88,16 @@ const weddingSchema = new Schema<IWedding>({
   },
   imageUrl: {
     type: String
+  },
+  isPublic: {
+    type: Boolean,
+    default: false
+  },
+  publicSlug: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true
   }
 }, {
   timestamps: true

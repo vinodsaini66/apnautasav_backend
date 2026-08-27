@@ -9,6 +9,7 @@ import { Guest } from '../models/guest.model';
 import { Vendor } from '../models/vendor.model';
 import { Task } from '../models/task.model';
 import { Budget } from '../models/budget.model';
+import { buildEventAttributes, generateICS } from '../services/calendar.service';
 
 export class EventController {
     static async createEvent(req: Request, res: Response): Promise<void> {
@@ -563,6 +564,40 @@ export class EventController {
         } catch (error: any) {
             logger.error('Get event timeline error:', error);
             ApiResponse.error(res, 500, error.message || 'Failed to fetch event timeline');
+        }
+    }
+
+    /**
+     * GET /:weddingId/events/:eventId/calendar.ics — a single event's own
+     * VEVENT, for "add just this function" (reuses the same builder as the
+     * whole-wedding calendar). 400s for a dateless "TBD" event — nothing
+     * to put on a calendar yet.
+     */
+    static async getEventCalendar(req: Request, res: Response): Promise<void> {
+        try {
+            const { weddingId, eventId } = req.params;
+
+            const event = await WeddingEvent.findOne({ _id: eventId, weddingId }).lean();
+            if (!event) {
+                ApiResponse.error(res, 404, 'Event not found');
+                return;
+            }
+
+            const attrs = buildEventAttributes(event);
+            if (!attrs) {
+                ApiResponse.error(res, 400, "This event doesn't have a date set yet, so it can't be added to a calendar");
+                return;
+            }
+
+            const ics = generateICS([attrs]);
+            const safeTitle = event.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+
+            res.setHeader('Content-Type', 'text/calendar');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeTitle || 'event'}.ics"`);
+            res.send(ics);
+        } catch (error: any) {
+            logger.error('Get event calendar error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to generate calendar');
         }
     }
 }

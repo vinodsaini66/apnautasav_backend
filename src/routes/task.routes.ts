@@ -14,6 +14,7 @@ router.use(authMiddleware);
 router.post('/:weddingId/tasks', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), checkResourceLimit('tasks'), validate(createTaskSchema), TaskController.createTask);
 router.get('/:weddingId/tasks', checkWeddingAccess, TaskController.getTasks);
 router.get('/:weddingId/tasks/assigned-to-me', checkWeddingAccess, TaskController.getMyTasks);
+router.get('/:weddingId/tasks/export', checkWeddingAccess, TaskController.exportTasks);
 router.put('/:weddingId/tasks/:taskId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(updateTaskSchema), TaskController.updateTask);
 router.delete('/:weddingId/tasks/:taskId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), TaskController.deleteTask);
 router.post('/:weddingId/tasks/:taskId/assign', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), validate(assignTaskSchema), TaskController.assignTask);

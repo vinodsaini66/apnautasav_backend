@@ -9,51 +9,18 @@ import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { uploadBufferToS3, deleteObjectFromS3ByUrl } from '../config/s3';
 import logger from '../utils/logger';
+import { WeddingVendorCategory, mapMarketplaceCategoryToVendorCategory } from '../utils/vendorCategoryMapping';
+import { sendExport, ExportColumn } from '../services/export.service';
 
-// Wedding-scoped Vendor.category enum values, in priority order for
-// keyword matching below.
-const WEDDING_VENDOR_CATEGORIES = [
-  'catering',
-  'photography',
-  'decoration',
-  'music',
-  'venue',
-  'invitations',
-  'logistics',
-  'others'
-] as const;
-type WeddingVendorCategory = (typeof WEDDING_VENDOR_CATEGORIES)[number];
-
-// Best-effort mapping from a free-text public VendorCategory name (e.g.
-// "Wedding Photographers", "Banquet Halls") to the closest wedding-scoped
-// category enum value. Falls back to 'others' when nothing matches
-// confidently — the request body can always override with an explicit
-// `category`.
-const mapMarketplaceCategoryToVendorCategory = (categoryName?: string): WeddingVendorCategory => {
-  if (!categoryName) return 'others';
-
-  const name = categoryName.toLowerCase();
-
-  const keywordMap: Record<WeddingVendorCategory, string[]> = {
-    catering: ['catering', 'caterer', 'food'],
-    photography: ['photo', 'video', 'cinemat'],
-    decoration: ['decor', 'florist', 'flower', 'mandap'],
-    music: ['music', 'dj', 'band', 'sangeet', 'orchestra'],
-    venue: ['venue', 'banquet', 'hall', 'hotel', 'resort', 'lawn', 'farmhouse'],
-    invitations: ['invit', 'card', 'stationery'],
-    logistics: ['transport', 'logistic', 'cab', 'car rental'],
-    others: []
-  };
-
-  for (const category of WEDDING_VENDOR_CATEGORIES) {
-    if (category === 'others') continue;
-    if (keywordMap[category].some((keyword) => name.includes(keyword))) {
-      return category;
-    }
-  }
-
-  return 'others';
-};
+const VENDOR_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'vendorName', label: 'Vendor Name' },
+  { key: 'category', label: 'Category' },
+  { key: 'contactPerson', label: 'Contact Person' },
+  { key: 'phoneNumber', label: 'Phone' },
+  { key: 'bookingStatus', label: 'Booking Status' },
+  { key: 'estimatedCost', label: 'Estimated Cost' },
+  { key: 'actualCost', label: 'Actual Cost' }
+];
 
 export class VendorController {
   static async createVendor(req: Request, res: Response): Promise<void> {
@@ -376,6 +343,39 @@ export class VendorController {
     } catch (error: any) {
       logger.error('Add vendor from marketplace error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to add vendor from marketplace');
+    }
+  }
+
+  /**
+   * GET /:weddingId/vendors/export?format=csv|pdf — full (unpaginated)
+   * list for this wedding, using getVendors' own filters.
+   */
+  static async exportVendors(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const { category, bookingStatus, eventId, format } = req.query;
+
+      const filter: any = { weddingId };
+      if (category) filter.category = category;
+      if (bookingStatus) filter.bookingStatus = bookingStatus;
+      if (eventId) filter.eventIds = eventId;
+
+      const vendors = await Vendor.find(filter).sort({ createdAt: -1 }).lean();
+
+      const rows = vendors.map((v) => ({
+        vendorName: v.vendorName,
+        category: v.category,
+        contactPerson: v.contactPerson || '',
+        phoneNumber: v.phoneNumber || '',
+        bookingStatus: v.bookingStatus,
+        estimatedCost: v.estimatedCost ?? '',
+        actualCost: v.actualCost ?? ''
+      }));
+
+      await sendExport(res, format as string, 'Vendor List', 'vendor-list', rows, VENDOR_EXPORT_COLUMNS);
+    } catch (error: any) {
+      logger.error('Export vendors error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to export vendors');
     }
   }
 }

@@ -539,6 +539,56 @@ const definition =
         }
       }
     },
+    "/weddings/public/{slug}": {
+      "get": {
+        "tags": ["Weddings"],
+        "summary": "Get a public wedding website by its slug",
+        "description": "Unauthenticated. Returns only a curated, guest-safe subset of the wedding (name, brideName, groomName, weddingDate, location, description, imageUrl, status). 404 generically whether the slug doesn't exist or the wedding isn't public — existence is never leaked.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public wedding page data"
+          },
+          "404": {
+            "description": "Wedding page not found"
+          }
+        }
+      }
+    },
+    "/weddings/public/{slug}/events": {
+      "get": {
+        "tags": ["Weddings"],
+        "summary": "Get a public wedding's event schedule by slug",
+        "description": "Unauthenticated. Same slug/isPublic lookup as GET /weddings/public/{slug}, then the public event schedule only (title, eventType, dates, location, dressCode, status) — no budget/vendor/task linkage.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public event schedule"
+          },
+          "404": {
+            "description": "Wedding page not found"
+          }
+        }
+      }
+    },
     "/weddings/{weddingId}/stats": {
       "get": {
         "tags": ["Weddings"],
@@ -561,6 +611,178 @@ const definition =
         "responses": {
           "200": {
             "description": "Wedding statistics fetched successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Wedding not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/public-settings": {
+      "put": {
+        "tags": ["Weddings"],
+        "summary": "Toggle the public wedding website on/off",
+        "description": "Admin-only. Auto-generates publicSlug from bride+groom names on first enable if none is supplied, retrying on a duplicate-key collision.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["isPublic"],
+                "properties": {
+                  "isPublic": {
+                    "type": "boolean"
+                  },
+                  "publicSlug": {
+                    "type": "string",
+                    "example": "priya-rahul-4f2a"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Public settings updated successfully"
+          },
+          "400": {
+            "description": "Requested publicSlug is already taken"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Wedding not found"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/search": {
+      "get": {
+        "tags": ["Weddings"],
+        "summary": "Cross-resource global search",
+        "description": "Fans out parallel case-insensitive regex queries across Guests, Tasks, Budget, Vendors, Events, and Notes, capped at 5 results per resource. Returns a single flattened array, each item tagged { _id, type, title, subtitle } — the frontend groups by `type` client-side. An empty/missing q returns an empty array rather than erroring.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Flattened, mixed-type search results"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/recommended-vendors": {
+      "get": {
+        "tags": ["Weddings"],
+        "summary": "Recommended marketplace vendors for this wedding",
+        "description": "Top 4 highest-rated active WeddingVendor marketplace listings whose primary category isn't already covered by one of this wedding's own booked/confirmed vendors.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to 4 recommended vendor listings"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/calendar.ics": {
+      "get": {
+        "tags": ["Weddings"],
+        "summary": "Download the whole wedding as an .ics calendar file",
+        "description": "One VEVENT per Event with a set startDateTime (dateless \"TBD\" events are skipped) plus one VEVENT for Wedding.weddingDate itself.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/calendar file stream",
+            "content": {
+              "text/calendar": {}
+            }
           },
           "401": {
             "description": "Unauthorized"
@@ -891,6 +1113,53 @@ const definition =
         "responses": {
           "200": {
             "description": "Guest statistics fetched successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/guests/export": {
+      "get": {
+        "tags": ["Guests"],
+        "summary": "Export the guest list as CSV or PDF",
+        "description": "Full (unpaginated) list using the same filters as GET /guests (category, rsvpStatus, search, eventId). Columns: name, email, phoneNumber, category, rsvpStatus, plusOne, isVIP.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["csv", "pdf"],
+              "default": "csv"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV or PDF file stream",
+            "content": {
+              "text/csv": {},
+              "application/pdf": {}
+            }
           },
           "401": {
             "description": "Unauthorized"
@@ -1581,6 +1850,53 @@ const definition =
         }
       }
     },
+    "/weddings/{weddingId}/tasks/export": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "Export the task list as CSV or PDF",
+        "description": "Full (unpaginated) list using the same filters as GET /tasks (status, priority, category, assignedTo, eventId). Columns: title, category, priority, status, dueDate, assignedTo (populated names joined with ', ').",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["csv", "pdf"],
+              "default": "csv"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV or PDF file stream",
+            "content": {
+              "text/csv": {},
+              "application/pdf": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/weddings/{weddingId}/budget": {
       "post": {
         "tags": ["Budget"],
@@ -2228,6 +2544,53 @@ const definition =
         }
       }
     },
+    "/weddings/{weddingId}/budget/export": {
+      "get": {
+        "tags": ["Budget"],
+        "summary": "Export the budget as CSV or PDF",
+        "description": "Full (unpaginated) list using the same filters as GET /budget (category, status, eventId). Columns: category, description, estimatedCost, actualCost, status, paymentDate, vendor (populated vendorName or blank).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["csv", "pdf"],
+              "default": "csv"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV or PDF file stream",
+            "content": {
+              "text/csv": {},
+              "application/pdf": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/weddings/{weddingId}/gifts": {
       "post": {
         "tags": ["Gifts"],
@@ -2627,6 +2990,53 @@ const definition =
         "responses": {
           "200": {
             "description": "List of vendors fetched successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/weddings/{weddingId}/vendors/export": {
+      "get": {
+        "tags": ["Vendors"],
+        "summary": "Export the vendor list as CSV or PDF",
+        "description": "Full (unpaginated) list using the same filters as GET /vendors (category, bookingStatus, eventId). Columns: vendorName, category, contactPerson, phoneNumber, bookingStatus, estimatedCost, actualCost.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["csv", "pdf"],
+              "default": "csv"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV or PDF file stream",
+            "content": {
+              "text/csv": {},
+              "application/pdf": {}
+            }
           },
           "401": {
             "description": "Unauthorized"
@@ -4048,6 +4458,56 @@ const definition =
           }
         }
       }
+    },
+    "/weddings/{weddingId}/events/{eventId}/calendar.ics": {
+      "get": {
+        "tags": ["Events"],
+        "summary": "Download a single event as an .ics calendar file",
+        "description": "Just this event's own VEVENT — \"add just this function\" to a calendar. 400s if the event has no startDateTime set yet (a valid, dateless \"TBD\" event).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/calendar file stream",
+            "content": {
+              "text/calendar": {}
+            }
+          },
+          "400": {
+            "description": "Event has no date set yet"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Event not found"
+          }
+        }
+      }
     }
   },
   "tags": [
@@ -4098,6 +4558,10 @@ const definition =
     {
       "name": "Shared Notes",
       "description": "Collaborative note-taking endpoints"
+    },
+    {
+      "name": "Events",
+      "description": "Wedding function/event scheduling endpoints"
     }
   ]
 }

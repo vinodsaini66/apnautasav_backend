@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes';
+import rsvpRoutes from './rsvp.routes';
 import weddingRoutes from './wedding.routes';
 import guestRoutes from './guest.routes';
 import taskRoutes from './task.routes';
@@ -25,6 +26,10 @@ import vendorEnquiryRoutes from './vendor-enquiry.routes';
 const router: Router = Router();
 
 router.use('/auth', authRoutes);
+// Public guest-facing RSVP loop (Phase 2) — own top-level mount, never
+// nested inside any auth-gated router (e.g. guestRoutes below, which
+// applies authMiddleware to everything it exports).
+router.use('/rsvp', rsvpRoutes);
 router.use('/me', userRoutes);
 router.use('/weddings', weddingRoutes);
 router.use('/weddings', guestRoutes);

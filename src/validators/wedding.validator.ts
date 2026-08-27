@@ -45,3 +45,18 @@ export const joinWeddingSchema = z.object({
     weddingCode: z.string().length(6, 'Wedding code must be 6 characters')
   })
 });
+
+// Public wedding website toggle (#29). publicSlug is optional — when
+// enabling for the first time without one, the controller auto-generates
+// it from bride+groom names.
+export const updatePublicSettingsSchema = z.object({
+  body: z.object({
+    isPublic: z.boolean(),
+    publicSlug: z
+      .string()
+      .min(3, 'Custom link must be at least 3 characters')
+      .max(120)
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Custom link may only contain lowercase letters, numbers, and hyphens')
+      .optional()
+  })
+});

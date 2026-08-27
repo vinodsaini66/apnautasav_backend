@@ -18,6 +18,7 @@ router.get('/:weddingId/budget', checkWeddingAccess, BudgetController.getBudgets
 router.put('/:weddingId/budget/:budgetId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(updateBudgetSchema), BudgetController.updateBudget);
 router.delete('/:weddingId/budget/:budgetId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), BudgetController.deleteBudget);
 router.get('/:weddingId/budget/analytics', checkWeddingAccess, BudgetController.getBudgetAnalytics);
+router.get('/:weddingId/budget/export', checkWeddingAccess, BudgetController.exportBudget);
 
 // Installments
 router.post('/:weddingId/budget/:budgetId/installments', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(createBudgetInstallmentSchema), BudgetController.addInstallment);
