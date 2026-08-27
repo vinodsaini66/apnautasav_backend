@@ -83,6 +83,39 @@ export const checkBudgetEnabled = async (req: Request, res: Response, next: Next
 };
 
 /**
+ * Gate the AI Assistant chat route on a feature toggle rather than a count,
+ * mirroring checkBudgetEnabled exactly (same "on/off for the plan" shape —
+ * AI Assistant has no natural cap either) but keyed on aiAssistantEnabled.
+ */
+export const checkAiAssistantEnabled = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { weddingId } = req.params;
+
+    const ownerId = await PlanResolutionService.getWeddingOwner(weddingId);
+    if (!ownerId) {
+      ApiResponse.error(res, 404, ERROR_MESSAGES.WEDDING_NOT_FOUND);
+      return;
+    }
+
+    const effective = await PlanResolutionService.getEffectivePlanForWedding(ownerId, weddingId);
+
+    if (!effective.aiAssistantEnabled) {
+      ApiResponse.error(res, 403, 'The AI Assistant is not available on your current plan.', {
+        code: 'FEATURE_DISABLED',
+        feature: 'aiAssistant',
+        planKey: effective.planKey,
+        upgradeRequired: true,
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    ApiResponse.error(res, 500, ERROR_MESSAGES.INTERNAL_ERROR);
+  }
+};
+
+/**
  * Gate wedding CREATION on the user's overall wedding-creation cap (Free =
  * 1; an active subscription raises this to its own configured value). No
  * wedding exists yet at this point, so unlike the checks above there's no

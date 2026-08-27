@@ -90,6 +90,7 @@ export class PurchaseService {
       weddingId: plan.type === 'one_time' ? weddingId : null,
       limitsSnapshot: plan.limits,
       budgetEnabledSnapshot: plan.budgetEnabled,
+      aiAssistantEnabledSnapshot: plan.aiAssistantEnabled,
       maxWeddingsSnapshot: plan.maxWeddings,
       billingPeriodSnapshot: plan.billingPeriod ?? null,
       amount: plan.price,

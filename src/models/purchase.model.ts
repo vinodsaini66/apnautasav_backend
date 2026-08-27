@@ -17,6 +17,8 @@ export interface IPurchase extends Document {
   weddingId?: mongoose.Types.ObjectId | null; // set only for 'one_time'; null = account-level subscription
   limitsSnapshot: IPlanLimits;
   budgetEnabledSnapshot: boolean;
+  // AI Assistant chat (Phase 9) — same snapshot shape as budgetEnabledSnapshot.
+  aiAssistantEnabledSnapshot: boolean;
   maxWeddingsSnapshot: number | null;
   billingPeriodSnapshot?: BillingPeriod | null;
   amount: number;
@@ -74,6 +76,14 @@ const purchaseSchema = new Schema<IPurchase>(
     budgetEnabledSnapshot: {
       type: Boolean,
       required: true,
+    },
+    // Not `required` (unlike budgetEnabledSnapshot) so purchases created
+    // before this field existed still validate on future re-saves; the
+    // schema default keeps new purchases and the plan-resolution fallback
+    // (`?? true`, since .lean() reads skip defaults) both landing on "on".
+    aiAssistantEnabledSnapshot: {
+      type: Boolean,
+      default: true,
     },
     maxWeddingsSnapshot: {
       type: Number,

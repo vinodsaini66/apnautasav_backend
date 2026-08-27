@@ -22,6 +22,7 @@ import bannerRoutes from './banner.routes';
 import planRoutes from './plan.routes';
 import purchaseRoutes from './purchase.routes';
 import vendorEnquiryRoutes from './vendor-enquiry.routes';
+import aiRoutes from './ai.routes';
 
 const router: Router = Router();
 
@@ -51,6 +52,7 @@ router.use('/banners', bannerRoutes);
 router.use('/plans', planRoutes);
 router.use('/purchases', purchaseRoutes);
 router.use('/vendor-enquiries', vendorEnquiryRoutes);
+router.use('/weddings', aiRoutes);
 
 
 export default router;

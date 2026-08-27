@@ -4508,6 +4508,128 @@ const definition =
           }
         }
       }
+    },
+    "/weddings/{weddingId}/ai/chat": {
+      "post": {
+        "tags": ["AI Assistant"],
+        "summary": "Chat with the AI wedding-planning assistant",
+        "description": "Stateless — the caller resends prior turns via `history` each request. The assistant can create guests/tasks/budget items/vendors/events/notes and update a task's status, gated on the same plan validators and resource limits as the equivalent REST endpoints, plus the wedding's aiAssistantEnabled plan flag. It has no delete capability at all.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weddingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "example": "Add a guest named Priya Sharma, category family"
+                  },
+                  "history": {
+                    "type": "array",
+                    "description": "Prior turns of this conversation, oldest first",
+                    "items": {
+                      "type": "object",
+                      "required": ["role", "content"],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": ["user", "assistant"]
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assistant reply, plus any actions it took",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "reply": {
+                          "type": "string"
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": ["created", "updated"]
+                              },
+                              "entityType": {
+                                "type": "string",
+                                "example": "guest"
+                              },
+                              "entityName": {
+                                "type": "string"
+                              },
+                              "success": {
+                                "type": "boolean"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing message"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden, or the AI Assistant is not available on the current plan"
+          },
+          "404": {
+            "description": "Wedding not found"
+          },
+          "503": {
+            "description": "The AI Assistant is not configured on this server"
+          }
+        }
+      }
     }
   },
   "tags": [
@@ -4562,6 +4684,10 @@ const definition =
     {
       "name": "Events",
       "description": "Wedding function/event scheduling endpoints"
+    },
+    {
+      "name": "AI Assistant",
+      "description": "Conversational AI wedding-planning assistant (Phase 9)"
     }
   ]
 }

@@ -16,6 +16,7 @@ const FREE_PLAN_FALLBACK = {
   planKey: 'free',
   limits: { guests: 50, tasks: 50, vendors: 5, collaborators: 0 } as IPlanLimits,
   budgetEnabled: false,
+  aiAssistantEnabled: true,
   maxWeddings: 1,
 };
 
@@ -26,6 +27,7 @@ export interface EffectivePlan {
   planKey: string;
   limits: IPlanLimits;
   budgetEnabled: boolean;
+  aiAssistantEnabled: boolean;
   purchaseId?: string;
 }
 
@@ -41,6 +43,7 @@ export class PlanResolutionService {
     planKey: string;
     limits: IPlanLimits;
     budgetEnabled: boolean;
+    aiAssistantEnabled: boolean;
     maxWeddings: number | null;
   }> {
     const freePlan = await Plan.findOne({ key: 'free', isActive: true }).lean();
@@ -52,6 +55,10 @@ export class PlanResolutionService {
       planKey: freePlan.key,
       limits: freePlan.limits,
       budgetEnabled: freePlan.budgetEnabled,
+      // Pre-migration Plan documents fetched via .lean() won't have this
+      // field in the DB yet — schema defaults don't apply to .lean() reads,
+      // so fall back to true (this field's default) explicitly.
+      aiAssistantEnabled: freePlan.aiAssistantEnabled ?? true,
       maxWeddings: freePlan.maxWeddings,
     };
   }
@@ -83,6 +90,8 @@ export class PlanResolutionService {
         planKey: subscription.planKey,
         limits: subscription.limitsSnapshot,
         budgetEnabled: subscription.budgetEnabledSnapshot,
+        // .lean() skips schema defaults — pre-migration purchases fall back to true.
+        aiAssistantEnabled: subscription.aiAssistantEnabledSnapshot ?? true,
         purchaseId: String(subscription._id),
       };
     }
@@ -101,6 +110,7 @@ export class PlanResolutionService {
         planKey: oneTime.planKey,
         limits: oneTime.limitsSnapshot,
         budgetEnabled: oneTime.budgetEnabledSnapshot,
+        aiAssistantEnabled: oneTime.aiAssistantEnabledSnapshot ?? true,
         purchaseId: String(oneTime._id),
       };
     }
@@ -111,6 +121,7 @@ export class PlanResolutionService {
       planKey: free.planKey,
       limits: free.limits,
       budgetEnabled: free.budgetEnabled,
+      aiAssistantEnabled: free.aiAssistantEnabled,
     };
   }
 

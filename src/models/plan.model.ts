@@ -30,6 +30,10 @@ export interface IPlan extends Document {
   billingPeriod?: BillingPeriod | null;
   limits: IPlanLimits;
   budgetEnabled: boolean;
+  // AI Assistant chat (Phase 9) — same "on/off for the plan" shape as
+  // budgetEnabled (no natural count to cap), defaulting to true so existing
+  // seeded plans keep working without a data migration.
+  aiAssistantEnabled: boolean;
   maxWeddings: number | null;
   isActive: boolean;
   sortOrder: number;
@@ -92,6 +96,10 @@ const planSchema = new Schema<IPlan>(
     budgetEnabled: {
       type: Boolean,
       default: false,
+    },
+    aiAssistantEnabled: {
+      type: Boolean,
+      default: true,
     },
     maxWeddings: {
       type: Number,

@@ -63,6 +63,7 @@ export class WeddingController {
           source: effective.source,
           limits: effective.limits,
           budgetEnabled: effective.budgetEnabled,
+          aiAssistantEnabled: effective.aiAssistantEnabled,
           usage,
         },
       });
