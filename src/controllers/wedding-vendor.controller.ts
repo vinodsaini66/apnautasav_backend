@@ -3,6 +3,31 @@ import { WeddingVendorService } from '../services/wedding-vendor.service';
 import { ApiResponse } from '../utils/apiResponse';
 import logger from '../utils/logger';
 
+// Fields only shown to a logged-in family — the whole point of requiring an
+// account before contacting a vendor. Everything else on the listing
+// (name, description, photos, location, pricing, ratings, ...) stays public
+// so families can still discover/evaluate vendors without an account.
+// `website` is intentionally NOT included — it's a public marketing link,
+// not a direct-contact channel, so it stays visible either way.
+const CONTACT_FIELDS = ['phone', 'alternatePhone', 'whatsappNumber', 'email'] as const;
+
+/**
+ * Strips direct-contact fields from a lean WeddingVendor object unless the
+ * request carries a valid auth token. Adds `contactVisible` so the frontend
+ * can distinguish "not logged in" from "vendor just has no phone on file".
+ */
+const applyContactVisibility = (vendor: any, isAuthenticated: boolean) => {
+    if (isAuthenticated) {
+        return { ...vendor, contactVisible: true };
+    }
+
+    const masked = { ...vendor, contactVisible: false };
+    for (const field of CONTACT_FIELDS) {
+        delete masked[field];
+    }
+    return masked;
+};
+
 export class WeddingVendorController {
 
     /**
@@ -86,9 +111,14 @@ export class WeddingVendorController {
                     }
                 );
 
+            const isAuthenticated = !!req.user;
+            const vendors = result.vendors.map((vendor) =>
+                applyContactVisibility(vendor, isAuthenticated)
+            );
+
             ApiResponse.paginated(
                 res,
-                result.vendors,
+                vendors,
                 result.page,
                 result.limit,
                 result.total
@@ -139,7 +169,7 @@ export class WeddingVendorController {
                 res,
                 200,
                 {
-                    data: vendor,
+                    data: applyContactVisibility(vendor, !!req.user),
                     message: 'Wedding vendor fetched successfully'
                 }
             );

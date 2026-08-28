@@ -4,15 +4,21 @@ import { authMiddleware } from '../middleware/auth.middleware';
 
 const router: Router = Router();
 
-router.use(authMiddleware);
+// Auth attached per-route rather than via a blanket router.use(...) — this
+// router shares the /wedding-vendors prefix with siblings that have public
+// GET routes (wedding-vendor/vendor-album/vendor-media.routes.ts); a
+// router-wide auth check here would otherwise intercept requests meant for
+// those, since it's mounted after them and Express only reaches this
+// router once the earlier ones fall through. Behavior is unchanged — every
+// route here still requires auth, just scoped explicitly instead of
+// implicitly via .use().
+router.post('/:vendorId/categories', authMiddleware, VendorCategoryMappingController.createMapping);
 
-router.post('/:vendorId/categories', VendorCategoryMappingController.createMapping);
+router.get('/:vendorId/categories', authMiddleware, VendorCategoryMappingController.getVendorCategories);
 
-router.get('/:vendorId/categories', VendorCategoryMappingController.getVendorCategories);
+router.put('/:vendorId/categories/:mappingId', authMiddleware, VendorCategoryMappingController.updateMapping);
 
-router.put('/:vendorId/categories/:mappingId', VendorCategoryMappingController.updateMapping);
-
-router.delete('/:vendorId/categories/:mappingId', VendorCategoryMappingController.deleteMapping);
+router.delete('/:vendorId/categories/:mappingId', authMiddleware, VendorCategoryMappingController.deleteMapping);
 
 export default router;
 /**

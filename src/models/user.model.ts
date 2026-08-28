@@ -13,6 +13,15 @@ export interface IUser extends Document {
     language: string;
     theme: string;
   };
+  avatarUrl?: string;
+  notificationSettings: {
+    pushEnabled: boolean;
+    emailEnabled: boolean;
+    taskReminders: boolean;
+    rsvpUpdates: boolean;
+    vendorMessages: boolean;
+    budgetAlerts: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +71,17 @@ const userSchema = new Schema<IUser>({
       type: String,
       default: 'light'
     }
+  },
+  avatarUrl: {
+    type: String
+  },
+  notificationSettings: {
+    pushEnabled: { type: Boolean, default: true },
+    emailEnabled: { type: Boolean, default: true },
+    taskReminders: { type: Boolean, default: true },
+    rsvpUpdates: { type: Boolean, default: true },
+    vendorMessages: { type: Boolean, default: true },
+    budgetAlerts: { type: Boolean, default: true }
   }
 }, {
   timestamps: true

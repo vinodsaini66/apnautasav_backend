@@ -21,7 +21,11 @@ const vendorMediaSchema = new Schema<IVendorMedia>(
     {
         vendorId: {
             type: Schema.Types.ObjectId,
-            ref: 'Vendor',
+            // Media belongs to a public marketplace listing (WeddingVendor),
+            // not the wedding-scoped tracker (Vendor) — was mislabeled before;
+            // VendorMediaService already validates against WeddingVendor, so
+            // this only fixes populate() metadata, not stored data.
+            ref: 'WeddingVendor',
             required: true,
             index: true,
         },
