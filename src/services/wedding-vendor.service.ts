@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { WeddingVendor } from '../models/wedding-vendor.model';
+import { WeddingVendor, type IVendorBranchLocation } from '../models/wedding-vendor.model';
 import { VendorCategoryMapping } from '../models/vendor-category-mapping.model';
 import logger from '../utils/logger';
 
@@ -13,6 +13,7 @@ export class WeddingVendorService {
 
     businessName: string;
     displayName?: string;
+    oldName?: string;
     slug: string;
 
     description?: string;
@@ -39,6 +40,9 @@ export class WeddingVendorService {
       longitude?: number;
       googlePlaceId?: string;
     };
+    // Additional branch/service locations beyond the primary `location`.
+    locations?: IVendorBranchLocation[];
+    categorySlug?: string;
 
     yearEstablished?: number;
     experienceYears?: number;
@@ -51,6 +55,26 @@ export class WeddingVendorService {
     isVerified?: boolean;
     isFeatured?: boolean;
     isPremium?: boolean;
+
+    awards?: string[];
+
+    pricing?: {
+      startingPrice?: number;
+      priceUnit?: string;
+      destinationPrice?: string;
+      destinationPriceUnit?: string;
+      packages?: { label: string; startingPrice: number }[];
+    };
+
+    // Venue-specific — harmless/empty for any other vendor category.
+    venueDetails?: {
+      guestCapacityMin?: number;
+      guestCapacityMax?: number;
+      venueTypes?: string[];
+      vegPricePerPlate?: number;
+      nonVegPricePerPlate?: number;
+      rentalPrice?: number;
+    };
   }) {
     try {
       const vendor =

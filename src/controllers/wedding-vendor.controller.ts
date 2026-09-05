@@ -10,11 +10,17 @@ import logger from '../utils/logger';
 // `website` is intentionally NOT included — it's a public marketing link,
 // not a direct-contact channel, so it stays visible either way.
 const CONTACT_FIELDS = ['phone', 'alternatePhone', 'whatsappNumber', 'email'] as const;
+// Per-branch contact fields (on each entry of `locations[]`) — same rule,
+// applied per-location instead of at the top level.
+const BRANCH_CONTACT_FIELDS = ['phone', 'whatsappNumber'] as const;
 
 /**
  * Strips direct-contact fields from a lean WeddingVendor object unless the
  * request carries a valid auth token. Adds `contactVisible` so the frontend
  * can distinguish "not logged in" from "vendor just has no phone on file".
+ * Also masks per-branch phone/whatsapp on each `locations[]` entry — a
+ * multi-location vendor's other branches shouldn't leak contact info that
+ * the primary location's fields are already gated on.
  */
 const applyContactVisibility = (vendor: any, isAuthenticated: boolean) => {
     if (isAuthenticated) {
@@ -24,6 +30,15 @@ const applyContactVisibility = (vendor: any, isAuthenticated: boolean) => {
     const masked = { ...vendor, contactVisible: false };
     for (const field of CONTACT_FIELDS) {
         delete masked[field];
+    }
+    if (Array.isArray(masked.locations)) {
+        masked.locations = masked.locations.map((branch: any) => {
+            const maskedBranch = { ...branch };
+            for (const field of BRANCH_CONTACT_FIELDS) {
+                delete maskedBranch[field];
+            }
+            return maskedBranch;
+        });
     }
     return masked;
 };

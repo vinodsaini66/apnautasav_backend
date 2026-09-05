@@ -20,11 +20,27 @@ export interface IVendorLocation {
     googlePlaceId?: string;
 }
 
+// A second (or third...) branch/service address for vendors with multiple
+// locations (e.g. a studio with a Jaipur and a Mumbai office). Deliberately
+// kept minimal — per Vendor_Data_Schema_Audit.md's scope call, just address
+// + optional per-branch contact, not a full duplicate of every vendor field.
+// The existing top-level `location` stays exactly as-is (still the primary
+// address used for search/filter by city/state) — this is purely additive.
+export interface IVendorBranchLocation extends IVendorLocation {
+    label?: string; // e.g. "Jaipur Studio" — lets a vendor distinguish branches on their profile
+    phone?: string;
+    whatsappNumber?: string;
+}
+
 export interface IVendor extends Document {
     vendorId?: mongoose.Types.ObjectId;
 
     businessName: string;
     displayName?: string;
+    // A former business name, for a vendor that's rebranded (e.g. reference
+    // data: "TigerLily" → "Wishco.") — display-only continuity, not used for
+    // search/lookup.
+    oldName?: string;
     slug: string;
 
     description?: string;
@@ -41,6 +57,16 @@ export interface IVendor extends Document {
     website?: string;
 
     location?: IVendorLocation;
+    // Additional branch/service locations beyond the primary `location`
+    // above — see IVendorBranchLocation.
+    locations?: IVendorBranchLocation[];
+
+    // Denormalized copy of the vendor's primary category slug (e.g.
+    // "wedding-photographers"), kept alongside the real VendorCategoryMapping
+    // relation (not a replacement for it) so a vendor's category is visible
+    // directly on the document without a join — used by bulk-import scripts
+    // that source data already keyed by a category slug.
+    categorySlug?: string;
 
     yearEstablished?: number;
     experienceYears?: number;
@@ -62,9 +88,44 @@ export interface IVendor extends Document {
     viewCount: number;
     inquiryCount: number;
 
+    // Recognition/awards (e.g. "Users' Choice Award Winner 2024") — plain
+    // strings, generic across every category, display-only.
+    awards?: string[];
+
     pricing?: {
         startingPrice?: number;
         priceUnit?: 'per day' | 'per function' | 'per plate' | 'per event' | 'starting from';
+        // A separate destination-wedding package rate — kept as free-text
+        // (matches how reference marketplace data itself stores it, e.g.
+        // "65.00 Lakhs" / "/day for 125 rooms") rather than forcing it into
+        // a strict number, since it's usually a package description, not a
+        // clean unit price.
+        destinationPrice?: string;
+        destinationPriceUnit?: string;
+        // Per-occasion/per-service starting prices, e.g. reference data:
+        // a decorator quoting a separate starting package for "Home
+        // function decor" distinct from their general starting_price.
+        // Generic across categories (a photographer might similarly quote
+        // separate packages per function) — not specific to decorators.
+        packages?: {
+            label: string;
+            startingPrice: number;
+        }[];
+    };
+
+    // Venue-specific details — present only for vendors in a venue-like
+    // category (banquet halls, resorts, hotels...), harmless/empty for any
+    // other category. Kept minimal per the same "basic details" scope as
+    // the rest of this schema — no attempt to model every possible
+    // per-space/per-hall breakdown a large resort might have.
+    venueDetails?: {
+        guestCapacityMin?: number;
+        guestCapacityMax?: number;
+        // e.g. ["4 Star & Above Hotels", "Banquet Halls", "Resorts"]
+        venueTypes?: string[];
+        vegPricePerPlate?: number;
+        nonVegPricePerPlate?: number;
+        rentalPrice?: number;
     };
 
     createdAt: Date;
@@ -86,6 +147,11 @@ const vendorSchema = new Schema<IVendor>(
         },
 
         displayName: {
+            type: String,
+            trim: true,
+        },
+
+        oldName: {
             type: String,
             trim: true,
         },
@@ -168,6 +234,37 @@ const vendorSchema = new Schema<IVendor>(
             googlePlaceId: String,
         },
 
+        // Extra branch/service locations — not searched/filtered on (only
+        // the primary `location` above is indexed for that), just displayed
+        // on the vendor's own profile page.
+        locations: {
+            type: [
+                {
+                    _id: false,
+                    label: String,
+                    address: String,
+                    area: String,
+                    city: String,
+                    state: String,
+                    country: { type: String, default: 'India' },
+                    pincode: String,
+                    latitude: Number,
+                    longitude: Number,
+                    googlePlaceId: String,
+                    phone: String,
+                    whatsappNumber: String,
+                },
+            ],
+            default: [],
+        },
+
+        categorySlug: {
+            type: String,
+            trim: true,
+            lowercase: true,
+            index: true,
+        },
+
         yearEstablished: Number,
 
         experienceYears: Number,
@@ -246,10 +343,37 @@ const vendorSchema = new Schema<IVendor>(
             type: Number,
             default: 0,
         },
+
+        awards: {
+            type: [String],
+            default: [],
+        },
+
         pricing: {
             startingPrice: { type: Number, default: 0 },
-            priceUnit: { type: String }
-        }
+            priceUnit: { type: String },
+            destinationPrice: { type: String },
+            destinationPriceUnit: { type: String },
+            packages: {
+                type: [
+                    {
+                        _id: false,
+                        label: { type: String, required: true },
+                        startingPrice: { type: Number, required: true },
+                    },
+                ],
+                default: [],
+            },
+        },
+
+        venueDetails: {
+            guestCapacityMin: Number,
+            guestCapacityMax: Number,
+            venueTypes: { type: [String], default: [] },
+            vegPricePerPlate: Number,
+            nonVegPricePerPlate: Number,
+            rentalPrice: Number,
+        },
     },
     {
         timestamps: true,
