@@ -97,6 +97,7 @@ export class WeddingVendorController {
                 search,
                 city,
                 state,
+                area,
                 status,
                 isVerified,
                 isFeatured,
@@ -105,6 +106,8 @@ export class WeddingVendorController {
                 minPrice,
                 maxPrice,
                 minRating,
+                minReviews,
+                hasAwards,
             } = req.query;
 
             const result =
@@ -115,6 +118,7 @@ export class WeddingVendorController {
                         search: search as string,
                         city: city as string,
                         state: state as string,
+                        area: area as string,
                         status: status as string,
                         isVerified: isVerified !== undefined ? isVerified === 'true' : undefined,
                         isFeatured: isFeatured !== undefined ? isFeatured === 'true' : undefined,
@@ -123,6 +127,8 @@ export class WeddingVendorController {
                         minPrice: minPrice !== undefined ? Number(minPrice) : undefined,
                         maxPrice: maxPrice !== undefined ? Number(maxPrice) : undefined,
                         minRating: minRating !== undefined ? Number(minRating) : undefined,
+                        minReviews: minReviews !== undefined ? Number(minReviews) : undefined,
+                        hasAwards: hasAwards !== undefined ? hasAwards === 'true' : undefined,
                     }
                 );
 
@@ -305,6 +311,108 @@ export class WeddingVendorController {
                 error.message ||
                 'Failed to delete wedding vendor'
             );
+        }
+    }
+
+
+    /**
+     * Create Vendor Inquiry
+     * The public profile page's "Send Message" CTA. Requires auth (see
+     * route) — kept consistent with contact info itself being login-gated,
+     * so this can't be used to reach a vendor while bypassing that gate.
+     */
+    static async createInquiry(
+        req: Request,
+        res: Response
+    ): Promise<void> {
+        try {
+            const { vendorId } = req.params;
+            const userId = req.user?.userId;
+            const { fullName, phone, email, whatsappNumber, functionDate, guestCount, functionType, message } = req.body;
+
+            if (!fullName || !phone) {
+                ApiResponse.error(res, 400, 'Full name and phone are required');
+                return;
+            }
+
+            const inquiry = await WeddingVendorService.createInquiry(vendorId, userId, {
+                fullName,
+                phone,
+                email,
+                whatsappNumber,
+                functionDate,
+                guestCount: guestCount !== undefined ? Number(guestCount) : undefined,
+                functionType,
+                message,
+            });
+
+            ApiResponse.success(res, 201, {
+                message: 'Your message has been sent to the vendor',
+                data: inquiry,
+            });
+        } catch (error: any) {
+            logger.error('Create wedding vendor inquiry error:', error);
+            ApiResponse.error(
+                res,
+                error.message === 'Wedding vendor not found' ? 404 : 500,
+                error.message || 'Failed to send message'
+            );
+        }
+    }
+
+
+    /**
+     * Get Vendor Reviews (public)
+     */
+    static async getVendorReviews(
+        req: Request,
+        res: Response
+    ): Promise<void> {
+        try {
+            const { vendorId } = req.params;
+            const { page = 1, limit = 10 } = req.query;
+
+            const result = await WeddingVendorService.getVendorReviews(vendorId, Number(page), Number(limit));
+
+            ApiResponse.success(res, 200, {
+                message: 'Vendor reviews fetched successfully',
+                data: {
+                    reviews: result.reviews,
+                    ratingDistribution: result.ratingDistribution,
+                    page: result.page,
+                    limit: result.limit,
+                    total: result.total,
+                    totalPages: result.totalPages,
+                },
+            });
+        } catch (error: any) {
+            logger.error('Get wedding vendor reviews error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to fetch reviews');
+        }
+    }
+
+
+    /**
+     * Get My Tracker Link
+     * Backs the "Write a Review" button — see service method's comment.
+     */
+    static async getMyTrackerLink(
+        req: Request,
+        res: Response
+    ): Promise<void> {
+        try {
+            const { vendorId } = req.params;
+            const userId = req.user!.userId;
+
+            const link = await WeddingVendorService.getMyTrackerLink(vendorId, userId);
+
+            ApiResponse.success(res, 200, {
+                message: link ? 'Tracker link found' : 'Not added to any wedding yet',
+                data: link,
+            });
+        } catch (error: any) {
+            logger.error('Get wedding vendor tracker link error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to resolve tracker link');
         }
     }
 }

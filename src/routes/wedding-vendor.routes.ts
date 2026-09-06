@@ -27,6 +27,38 @@ router.get(
 );
 
 /**
+ * GET /:vendorId/reviews — public, same reasoning as the listing/detail
+ * GETs above (reviews are part of a vendor's public profile).
+ */
+router.get(
+  '/:vendorId/reviews',
+  WeddingVendorController.getVendorReviews
+);
+
+/**
+ * POST /:vendorId/inquiries — the profile page's "Send Message" CTA.
+ * Requires auth: contact info on this listing is deliberately gated behind
+ * login (see applyContactVisibility above), and letting an anonymous
+ * visitor message a vendor directly would be a backdoor around that same
+ * gate — so this stays consistent with it rather than public.
+ */
+router.post(
+  '/:vendorId/inquiries',
+  authMiddleware,
+  WeddingVendorController.createInquiry
+);
+
+/**
+ * GET /:vendorId/my-tracker-link — auth required (answers "for this user").
+ * Backs the "Write a Review" button.
+ */
+router.get(
+  '/:vendorId/my-tracker-link',
+  authMiddleware,
+  WeddingVendorController.getMyTrackerLink
+);
+
+/**
  * Create/update/delete a marketplace listing — platform-level content, not
  * scoped to any one wedding, so this is admin-only (mirrors banner.routes.ts
  * and plan.routes.ts's use of requireAdmin), not just "any logged-in user".

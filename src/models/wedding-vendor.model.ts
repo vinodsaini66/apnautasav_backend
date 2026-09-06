@@ -68,6 +68,18 @@ export interface IVendor extends Document {
     // that source data already keyed by a category slug.
     categorySlug?: string;
 
+    // Free-text detail blocks for the profile page's "About" tab — kept
+    // separate from `description` (the vendor's own written bio) since
+    // these are quick-scan facts, not narrative copy. All optional and
+    // display-only; nothing here is used for search/filter.
+    profileDetails?: {
+        services?: string[]; // e.g. ["Candid Photography", "Traditional Photography", "Pre-Wedding Shoot"]
+        workingStyle?: string;
+        paymentTerms?: string;
+        travelCost?: string;
+        deliveryTime?: string;
+    };
+
     yearEstablished?: number;
     experienceYears?: number;
     teamSize?: number;
@@ -263,6 +275,14 @@ const vendorSchema = new Schema<IVendor>(
             trim: true,
             lowercase: true,
             index: true,
+        },
+
+        profileDetails: {
+            services: { type: [String], default: [] },
+            workingStyle: String,
+            paymentTerms: String,
+            travelCost: String,
+            deliveryTime: String,
         },
 
         yearEstablished: Number,
