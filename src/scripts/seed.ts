@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import { connectDatabase } from '../config/database';
 import { Plan } from '../models/plan.model';
 import { VendorCategory } from '../models/vendor-category.model';
+import { Banner } from '../models/banner.model';
+import { User } from '../models/user.model';
 import logger from '../utils/logger';
 
 // Idempotent — safe to run repeatedly (e.g. on every deploy). Upserts by
@@ -256,10 +258,66 @@ async function seedVendorCategories(): Promise<void> {
   }
 }
 
+// --- Promotional dashboard banners ------------------------------------------
+// Placeholder/dummy sponsor banners so the dashboard's banner carousel has
+// something to render out of the box (see BannerService.getActiveBanners).
+// Idempotent — upserted by `imageUrl`, so re-running this script never
+// duplicates them.
+
+interface BannerSeed {
+  title: string;
+  imageUrl: string;
+  redirectUrl: string;
+  altText: string;
+  sortOrder: number;
+}
+
+const BANNER_SEEDS: BannerSeed[] = [
+  {
+    title: 'Real Weddings, Real Inspiration',
+    imageUrl: 'https://image.wedmegood.com/uploads/member/1638019/1765019793__DSC0116_min.jpg',
+    redirectUrl: '/vendors',
+    altText: 'Bride and groom at a beautifully decorated wedding function',
+    sortOrder: 0,
+  },
+  {
+    title: 'Find Vendors Trusted by Real Couples',
+    imageUrl: 'https://image.wedmegood.com/uploads/member/1638019/1765019873__DSC1536.jpg',
+    redirectUrl: '/vendors',
+    altText: 'Wedding couple portrait',
+    sortOrder: 1,
+  },
+  {
+    title: 'Plan Every Function, Beautifully',
+    imageUrl: 'https://image.wedmegood.com/uploads/member/1638019/1765019904__DSC6908.jpg',
+    redirectUrl: '/vendors',
+    altText: 'Wedding ceremony decor and setup',
+    sortOrder: 2,
+  },
+];
+
+async function seedBanners(): Promise<void> {
+  // `createdBy` is a required ref on Banner — attribute these to any
+  // existing user (an admin if there is one) rather than fabricating an
+  // unrelated ObjectId, but fall back to one if the DB has no users yet.
+  const attributedUser = (await User.findOne({ role: 'admin' })) || (await User.findOne());
+  const createdBy = attributedUser ? attributedUser._id : new mongoose.Types.ObjectId();
+
+  for (const seed of BANNER_SEEDS) {
+    await Banner.findOneAndUpdate(
+      { imageUrl: seed.imageUrl },
+      { $setOnInsert: { ...seed, isActive: true, createdBy } },
+      { upsert: true, new: true }
+    );
+    logger.info(`Banner seeded/verified: ${seed.title}`);
+  }
+}
+
 async function main(): Promise<void> {
   await connectDatabase();
   await seedPlans();
   await seedVendorCategories();
+  await seedBanners();
   logger.info('Seeding complete');
   await mongoose.disconnect();
   process.exit(0);

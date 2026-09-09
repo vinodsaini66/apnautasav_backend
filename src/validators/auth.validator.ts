@@ -28,3 +28,43 @@ export const verifyOtpSchema = z.object({
       .optional()
   })
 });
+
+// Email + password auth (new flow, alongside the OTP flow above).
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(128, 'Password is too long');
+
+export const signupSchema = z.object({
+  body: z.object({
+    fullName: z.string()
+      .trim()
+      .min(2, 'Name must be at least 2 characters')
+      .max(100, 'Name cannot exceed 100 characters'),
+    email: z.string()
+      .email('Invalid email format'),
+    password: passwordSchema
+  })
+});
+
+export const loginSchema = z.object({
+  body: z.object({
+    email: z.string()
+      .email('Invalid email format'),
+    password: z.string()
+      .min(1, 'Password is required')
+  })
+});
+
+export const verifyEmailSchema = z.object({
+  body: z.object({
+    token: z.string()
+      .min(1, 'Verification token is required')
+  })
+});
+
+export const resendVerificationSchema = z.object({
+  body: z.object({
+    email: z.string()
+      .email('Invalid email format')
+  })
+});

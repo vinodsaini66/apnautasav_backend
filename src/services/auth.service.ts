@@ -1,12 +1,148 @@
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { User } from '../models/user.model';
-import { generateInvitationCode, generateOTP } from '../utils/generateCode';
+import { generateInvitationCode, generateOTP, generateVerificationToken } from '../utils/generateCode';
 import { TokenPayload } from '../types';
 import logger from '../utils/logger';
 import collaborationInvitation from '../models/collaborationInvitation';
 import { Collaborator } from '../models/collaborator.model';
+import { EmailService } from './email.service';
+
+const EMAIL_VERIFICATION_EXPIRY_HOURS = 24;
+const FRONTEND_BASE_URL = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+
+// Thrown by login() when credentials are correct but the account's email
+// hasn't been verified yet — the controller maps this to a 403 with a
+// machine-readable code so the frontend can offer "Resend verification
+// email" instead of a generic error.
+export class EmailNotVerifiedError extends Error {
+  constructor() {
+    super('Please verify your email address before logging in');
+    this.name = 'EmailNotVerifiedError';
+  }
+}
 
 export class AuthService {
+  // ---------------------------------------------------------------------
+  // Email + password auth (new flow). The OTP flow below is kept as-is and
+  // still works — this is an additional flow, not a replacement.
+  // ---------------------------------------------------------------------
+
+  private static async createAndSendVerification(user: any, fullName: string): Promise<void> {
+    const token = generateVerificationToken();
+    user.emailVerificationToken = token;
+    user.emailVerificationTokenExpiry = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRY_HOURS * 60 * 60 * 1000);
+    await user.save();
+
+    const verificationLink = `${FRONTEND_BASE_URL}/auth/verify-email?token=${token}`;
+    await EmailService.sendVerificationEmail(user.email, fullName, verificationLink);
+  }
+
+  static async signup(email: string, password: string, fullName: string): Promise<{ message: string }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail }).select('+password +isVerified');
+
+    if (user && user.password && user.isVerified) {
+      throw new Error('An account with this email already exists. Please log in instead.');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    if (user) {
+      // Account exists but was never completed (e.g. started via OTP flow,
+      // or signed up before but never clicked the verification link) —
+      // update it in place rather than failing on the unique email index.
+      user.password = passwordHash;
+      user.fullName = fullName;
+      user.isVerified = false;
+    } else {
+      user = new User({
+        email: normalizedEmail,
+        password: passwordHash,
+        fullName,
+        isVerified: false
+      });
+    }
+
+    await this.createAndSendVerification(user, fullName);
+
+    return { message: 'Account created. Please check your email to verify your address.' };
+  }
+
+  static async login(email: string, password: string): Promise<{ token: string; refreshToken: string; user: any }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
+
+    if (!user || !user.password) {
+      throw new Error('Invalid email or password');
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      throw new Error('Invalid email or password');
+    }
+
+    if (!user.isVerified) {
+      throw new EmailNotVerifiedError();
+    }
+
+    const token = this.generateToken(user);
+    const refreshToken = this.generateRefreshToken(user);
+
+    return {
+      token,
+      refreshToken,
+      user: {
+        id: user._id,
+        phoneNumber: user.phoneNumber,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role
+      }
+    };
+  }
+
+  static async verifyEmail(token: string): Promise<{ message: string }> {
+    const user = await User.findOne({ emailVerificationToken: token })
+      .select('+emailVerificationToken +emailVerificationTokenExpiry');
+
+    if (!user || !user.emailVerificationTokenExpiry) {
+      throw new Error('Invalid or expired verification link');
+    }
+
+    if (new Date() > user.emailVerificationTokenExpiry) {
+      throw new Error('This verification link has expired. Please request a new one.');
+    }
+
+    user.isVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationTokenExpiry = undefined;
+    await user.save();
+
+    return { message: 'Email verified successfully. You can now log in.' };
+  }
+
+  static async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const genericMessage = 'If an account with that email exists and needs verification, a new link has been sent.';
+
+    const user = await User.findOne({ email: normalizedEmail }).select('+password +isVerified');
+
+    // Don't reveal whether the email exists, and don't resend for an
+    // already-verified or password-less (OTP-only) account.
+    if (!user || !user.password || user.isVerified) {
+      return { message: genericMessage };
+    }
+
+    await this.createAndSendVerification(user, user.fullName);
+
+    return { message: genericMessage };
+  }
+
+  // ---------------------------------------------------------------------
+  // OTP auth (existing flow — untouched, kept for future use).
+  // ---------------------------------------------------------------------
+
   static async sendOTP(email: string): Promise<{ success: boolean; message: string }> {
     try {
       const otp = process.env.NODE_ENV === 'development'

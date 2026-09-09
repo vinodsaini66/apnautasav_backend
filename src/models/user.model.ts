@@ -7,6 +7,11 @@ export interface IUser extends Document {
   fcm_token?: string;
   otp?: string;
   otpExpiry?: Date;
+  // Email+password auth (kept alongside the OTP fields above — OTP login is
+  // not removed, just not used by the current signup/login flow).
+  password?: string;
+  emailVerificationToken?: string;
+  emailVerificationTokenExpiry?: Date;
   isVerified: boolean;
   role: 'user' | 'admin';
   preferences: {
@@ -50,6 +55,18 @@ const userSchema = new Schema<IUser>({
     select: false
   },
   otpExpiry: {
+    type: Date,
+    select: false
+  },
+  password: {
+    type: String,
+    select: false
+  },
+  emailVerificationToken: {
+    type: String,
+    select: false
+  },
+  emailVerificationTokenExpiry: {
     type: Date,
     select: false
   },

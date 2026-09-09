@@ -1,10 +1,80 @@
 import { Request, Response } from 'express';
-import { AuthService } from '../services/auth.service';
+import { AuthService, EmailNotVerifiedError } from '../services/auth.service';
 import { ApiResponse } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import { clearAuthCookie, setAuthCookie } from '../helpers/function';
 
 export class AuthController {
+  // -------------------------------------------------------------------
+  // Email + password auth (new flow, alongside the OTP flow below).
+  // -------------------------------------------------------------------
+
+  static async signup(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password, fullName } = req.body;
+
+      const result = await AuthService.signup(email, password, fullName);
+
+      ApiResponse.success(res, 201, { message: result.message });
+    } catch (error: any) {
+      logger.error('Signup error:', error);
+      ApiResponse.error(res, 400, error.message || 'Failed to create account');
+    }
+  }
+
+  static async login(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password } = req.body;
+
+      const result = await AuthService.login(email, password);
+
+      setAuthCookie(res, result.token);
+
+      ApiResponse.success(res, 200, {
+        message: 'Logged in successfully',
+        data: result
+      });
+    } catch (error: any) {
+      if (error instanceof EmailNotVerifiedError) {
+        logger.info(`Login blocked, email not verified: ${req.body?.email}`);
+        ApiResponse.error(res, 403, error.message, { code: 'EMAIL_NOT_VERIFIED' });
+        return;
+      }
+      logger.error('Login error:', error);
+      ApiResponse.error(res, 401, error.message || 'Failed to log in');
+    }
+  }
+
+  static async verifyEmail(req: Request, res: Response): Promise<void> {
+    try {
+      const { token } = req.body;
+
+      const result = await AuthService.verifyEmail(token);
+
+      ApiResponse.success(res, 200, { message: result.message });
+    } catch (error: any) {
+      logger.error('Verify email error:', error);
+      ApiResponse.error(res, 400, error.message || 'Failed to verify email');
+    }
+  }
+
+  static async resendVerification(req: Request, res: Response): Promise<void> {
+    try {
+      const { email } = req.body;
+
+      const result = await AuthService.resendVerificationEmail(email);
+
+      ApiResponse.success(res, 200, { message: result.message });
+    } catch (error: any) {
+      logger.error('Resend verification error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to resend verification email');
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // OTP auth (existing flow — untouched, kept for future use).
+  // -------------------------------------------------------------------
+
   static async sendOTP(req: Request, res: Response): Promise<void> {
     try {
       const { email} = req.body;

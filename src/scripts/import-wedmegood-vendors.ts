@@ -44,14 +44,15 @@ const APPROVED_CATEGORY_SLUGS = [
   // 'wedding-venues',
   // "wedding-catering",
   // "wedding-decorators",
+  // "wedding-planners",
 
-  "pre-wedding-shoot",
+  // "pre-wedding-shoot",
   // "bridal-makeup",
   // "sangeet-choreographers",
-  // "wedding-planners",
+
   // "wedding-cards",
   // "wedding-pandits-priests",
-  // "wedding-jewellery",
+  "wedding-jewellery",
 
 ] as const;
 

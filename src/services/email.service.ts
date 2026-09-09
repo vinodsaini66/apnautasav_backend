@@ -59,6 +59,81 @@ export class EmailService {
       vendorEnquiryAcknowledgementTemplate(enquiry)
     );
   }
+
+  /**
+   * Verification link email for the email+password signup flow
+   * (AuthService.signup / resendVerificationEmail). `verificationLink` is a
+   * FRONTEND_URL page, not a backend route — the frontend page reads the
+   * `token` query param and calls POST /auth/verify-email itself.
+   */
+  static async sendVerificationEmail(to: string, fullName: string, verificationLink: string): Promise<boolean> {
+    return this.sendMail(
+      to,
+      'Verify your email — ApnaUtsav',
+      verificationEmailTemplate(fullName, verificationLink)
+    );
+  }
+}
+
+function verificationEmailTemplate(fullName: string, verificationLink: string): string {
+  return `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background-color:#fff6ef;font-family:Georgia,'Times New Roman',serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff6ef;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" style="max-width:520px;background-color:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(200,30,74,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#7a1330,#c81e4a,#fb4d61);padding:32px 32px 28px;text-align:center;">
+                <span style="display:inline-block;width:44px;height:44px;line-height:44px;border-radius:12px;background:rgba(255,255,255,0.18);color:#ffffff;font-size:20px;">&#9829;</span>
+                <div style="margin-top:12px;font-size:22px;font-weight:bold;color:#ffffff;">
+                  Apna<span style="color:#ffd88a;">Utsav</span>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 32px 8px;">
+                <p style="margin:0 0 4px;font-size:12px;font-weight:bold;letter-spacing:0.08em;color:#c81e4a;text-transform:uppercase;">Confirm your email</p>
+                <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#1e1b1f;">Welcome, ${escapeHtml(fullName)}!</h1>
+                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4b4b52;">
+                  Thanks for signing up for ApnaUtsav. Confirm your email address to activate your account and start
+                  planning your wedding.
+                </p>
+                <table role="presentation" width="100%" style="margin:0 0 24px;">
+                  <tr>
+                    <td align="center">
+                      <a href="${verificationLink}" style="display:inline-block;padding:14px 32px;border-radius:999px;background:linear-gradient(135deg,#7a1330,#c81e4a,#fb4d61);color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;text-decoration:none;">
+                        Verify email address
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#6b6b72;">
+                  Or paste this link into your browser:
+                </p>
+                <p style="margin:0 0 24px;font-size:13px;line-height:1.6;word-break:break-all;">
+                  <a href="${verificationLink}" style="color:#c81e4a;">${verificationLink}</a>
+                </p>
+                <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#9a9aa0;">
+                  This link expires in 24 hours. If you didn't create an ApnaUtsav account, you can safely ignore
+                  this email.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px 32px;border-top:1px solid #f3e4de;">
+                <p style="margin:0;font-size:12px;color:#9a9aa0;">
+                  &copy; ${new Date().getFullYear()} ApnaUtsav &middot; This is an automated email, please don't reply.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }
 
 function vendorEnquiryAcknowledgementTemplate(enquiry: IVendorEnquiry): string {

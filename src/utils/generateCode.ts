@@ -1,3 +1,12 @@
+import crypto from 'node:crypto';
+
+// Long random token for the email-verification link (email+password signup
+// flow) — unlike generateOTP, this is never shown to the user, just embedded
+// in the verification URL, so it can be long enough to be unguessable.
+export const generateVerificationToken = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
 export const generateWeddingCode = (): string => {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';

@@ -343,15 +343,23 @@ export class WeddingVendorService {
 
 
   /**
-   * Get Wedding Vendor By ID
+   * Get Wedding Vendor By ID or slug — the public profile page's URL uses
+   * the human-readable `slug` (e.g. "priya-decor-jaipur-4f2a"), not the raw
+   * Mongo _id, so this accepts either: a valid ObjectId looks up by `_id`
+   * (kept for any existing internal/bridge callers using the real id),
+   * anything else is treated as a slug.
    */
   static async getVendorById(
     vendorId: string
   ) {
     try {
+      const lookup = mongoose.Types.ObjectId.isValid(vendorId)
+        ? { _id: vendorId }
+        : { slug: vendorId };
+
       const vendor =
         await WeddingVendor.findOne({
-          _id: vendorId,
+          ...lookup,
           isDeleted: false,
         }).lean();
 
