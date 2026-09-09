@@ -5,7 +5,8 @@ import {
   updateFcmTokenSchema,
   updateProfileSchema,
   updatePreferencesSchema,
-  updateNotificationSettingsSchema
+  updateNotificationSettingsSchema,
+  changePasswordSchema
 } from '../validators/user.validator';
 import { imageUpload } from '../middleware/upload.middleware';
 import { UserController } from '../controllers/user.controller';
@@ -19,6 +20,7 @@ router.put('/fcm-token', validate(updateFcmTokenSchema), UserController.updateFc
 router.patch('/profile', validate(updateProfileSchema), UserController.updateProfile);
 router.patch('/preferences', validate(updatePreferencesSchema), UserController.updatePreferences);
 router.patch('/notification-settings', validate(updateNotificationSettingsSchema), UserController.updateNotificationSettings);
+router.patch('/change-password', validate(changePasswordSchema), UserController.changePassword);
 router.post('/avatar', imageUpload.single('avatar'), UserController.uploadAvatar);
 
 export default router;

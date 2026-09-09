@@ -9,6 +9,7 @@ import { betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod';
 // stays untouched).
 import { z } from 'zod/v4';
 import { Wedding } from '../models/wedding.model';
+import { VENDOR_CATEGORIES } from '../models/vendor.model';
 import { ApiResponse } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import * as AiTools from '../services/ai-tools.service';
@@ -70,7 +71,7 @@ const budgetItemInputSchema = z.object({
 
 const vendorInputSchema = z.object({
   vendorName: z.string().min(2).max(100),
-  category: z.enum(['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'others']),
+  category: z.enum(VENDOR_CATEGORIES),
   contactPerson: z.string().optional(),
   email: z.string().optional(),
   phoneNumber: z.string().min(10).describe('Vendor contact phone number, at least 10 digits'),

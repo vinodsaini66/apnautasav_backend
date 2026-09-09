@@ -8,10 +8,42 @@ export interface IVendorDocument {
   uploadedAt: Date;
 }
 
+// The wedding-scoped vendor tracker's category list — a family's own
+// shortlist of vendor *types*, not the public marketplace's taxonomy
+// (VendorCategory/VendorCategoryMapping, a separate 2-level system — see
+// CLAUDE.md). Single source of truth: imported by validators/vendor.validator.ts
+// so the Mongoose-level enum and the request-validation enum can never drift
+// apart, and by utils/vendorCategoryMapping.ts (which maps a marketplace
+// listing's category name to the closest value here for the "Add to My
+// Wedding" bridge).
+export const VENDOR_CATEGORIES = [
+  'photographer',
+  'videographer',
+  'caterer',
+  'decorator',
+  'dj',
+  'band',
+  'makeup-artist',
+  'mehendi-artist',
+  'florist',
+  'choreographer',
+  'invitation',
+  'transport',
+  'security',
+  'hospitality',
+  'light-sound',
+  'furniture',
+  'tent',
+  'artist',
+  'priest-pandit'
+] as const;
+
+export type VendorCategory = (typeof VENDOR_CATEGORIES)[number];
+
 export interface IVendor extends Document {
   weddingId: mongoose.Types.ObjectId;
   vendorName: string;
-  category: string;
+  category: VendorCategory;
   contactPerson?: string;
   email?: string;
   phoneNumber: string;
@@ -78,7 +110,7 @@ const vendorSchema = new Schema<IVendor>({
   },
   category: {
     type: String,
-    enum: ['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'others'],
+    enum: VENDOR_CATEGORIES,
     required: true
   },
   contactPerson: {

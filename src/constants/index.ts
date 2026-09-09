@@ -17,7 +17,15 @@ export const CONSTANTS = {
     GUEST: ['family', 'friends', 'colleagues', 'others'],
     TASK: ['decoration', 'catering', 'logistics', 'invitations', 'music', 'photography', 'others'],
     BUDGET: ['venue', 'catering', 'decoration', 'photography', 'music', 'invitations', 'logistics', 'other'],
-    VENDOR: ['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'other']
+    // Kept only for reference — validators/vendor.validator.ts and
+    // models/vendor.model.ts import VENDOR_CATEGORIES directly and are the
+    // actual source of truth; this array isn't imported anywhere.
+    VENDOR: [
+      'photographer', 'videographer', 'caterer', 'decorator', 'dj', 'band',
+      'makeup-artist', 'mehendi-artist', 'florist', 'choreographer', 'invitation',
+      'transport', 'security', 'hospitality', 'light-sound', 'furniture', 'tent',
+      'artist', 'priest-pandit'
+    ]
   },
   
   CURRENCIES: ['INR', 'USD', 'EUR', 'GBP'],

@@ -29,3 +29,15 @@ export const updateNotificationSettingsSchema = z.object({
     budgetAlerts: z.boolean().optional()
   }).refine((data) => Object.keys(data).length > 0, { message: 'At least one field is required' })
 });
+
+export const changePasswordSchema = z.object({
+  body: z.object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z.string()
+      .min(8, 'New password must be at least 8 characters')
+      .max(128, 'New password is too long')
+  }).refine((data) => data.newPassword !== data.currentPassword, {
+    message: 'New password must be different from the current password',
+    path: ['newPassword']
+  })
+});

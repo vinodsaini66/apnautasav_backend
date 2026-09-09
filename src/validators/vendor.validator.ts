@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { VENDOR_CATEGORIES } from '../models/vendor.model';
 
 export const createVendorSchema = z.object({
   body: z.object({
     vendorName: z.string().min(2).max(100),
-    category: z.enum(['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'others']),
+    category: z.enum(VENDOR_CATEGORIES),
     contactPerson: z.string().optional(),
     email: z.string().email().optional(),
     phoneNumber: z.string().min(10),
@@ -20,7 +21,7 @@ export const createVendorSchema = z.object({
 export const updateVendorSchema = z.object({
   body: z.object({
     vendorName: z.string().min(2).max(100).optional(),
-    category: z.enum(['catering', 'photography', 'decoration', 'music', 'venue', 'invitations', 'logistics', 'others']).optional(),
+    category: z.enum(VENDOR_CATEGORIES).optional(),
     contactPerson: z.string().optional(),
     email: z.string().email().optional(),
     phoneNumber: z.string().min(10).optional(),

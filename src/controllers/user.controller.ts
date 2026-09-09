@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { ApiResponse } from '../utils/apiResponse';
 import logger from '../utils/logger';
 import { User } from '../models/user.model';
@@ -160,6 +161,43 @@ export class UserController {
         } catch (error: any) {
             logger.error('Update notification settings error:', error);
             ApiResponse.error(res, 500, error.message || 'Failed to update notification settings');
+        }
+    }
+
+    static async changePassword(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.userId;
+            const { currentPassword, newPassword } = req.body;
+
+            const user = await User.findById(userId).select('+password');
+            if (!user) {
+                ApiResponse.error(res, 404, 'User not found');
+                return;
+            }
+
+            if (!user.password) {
+                // Account was created via the OTP flow and never set a
+                // password — there's nothing to verify against, so this
+                // endpoint can't be used to set one for the first time.
+                ApiResponse.error(res, 400, 'No password is set for this account yet');
+                return;
+            }
+
+            const isMatch = await bcrypt.compare(currentPassword, user.password);
+            if (!isMatch) {
+                ApiResponse.error(res, 401, 'Current password is incorrect');
+                return;
+            }
+
+            user.password = await bcrypt.hash(newPassword, 10);
+            await user.save();
+
+            ApiResponse.success(res, 200, {
+                message: 'Password changed successfully'
+            });
+        } catch (error: any) {
+            logger.error('Change password error:', error);
+            ApiResponse.error(res, 500, error.message || 'Failed to change password');
         }
     }
 

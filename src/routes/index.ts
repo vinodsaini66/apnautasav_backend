@@ -24,6 +24,7 @@ import planRoutes from './plan.routes';
 import purchaseRoutes from './purchase.routes';
 import vendorEnquiryRoutes from './vendor-enquiry.routes';
 import aiRoutes from './ai.routes';
+import blogRoutes from './blog.routes';
 
 const router: Router = Router();
 
@@ -55,6 +56,7 @@ router.use('/plans', planRoutes);
 router.use('/purchases', purchaseRoutes);
 router.use('/vendor-enquiries', vendorEnquiryRoutes);
 router.use('/weddings', aiRoutes);
+router.use('/blogs', blogRoutes);
 
 
 export default router;

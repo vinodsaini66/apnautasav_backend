@@ -4,46 +4,51 @@
 // "Banquet Halls") into the closest wedding-scoped Vendor.category enum
 // value. Kept in one place so the keyword list can't drift between the two
 // call sites.
+import { VENDOR_CATEGORIES, type VendorCategory } from '../models/vendor.model';
 
-// Wedding-scoped Vendor.category enum values, in priority order for
-// keyword matching below.
-export const WEDDING_VENDOR_CATEGORIES = [
-  'catering',
-  'photography',
-  'decoration',
-  'music',
-  'venue',
-  'invitations',
-  'logistics',
-  'others'
-] as const;
+export type WeddingVendorCategory = VendorCategory;
 
-export type WeddingVendorCategory = (typeof WEDDING_VENDOR_CATEGORIES)[number];
+// The tracker's category list (see models/vendor.model.ts) has no generic
+// "venue"/"others" bucket — 'hospitality' is the closest fit for anything
+// that doesn't match a more specific keyword below (venues, hotels, and
+// resorts included), so it doubles as both a real category and the fallback.
+const FALLBACK_CATEGORY: WeddingVendorCategory = 'hospitality';
 
-// Falls back to 'others' when nothing matches confidently — callers can
-// always override with an explicit `category` where one is available.
+const KEYWORD_MAP: Record<WeddingVendorCategory, string[]> = {
+  photographer: ['photograph'],
+  videographer: ['video', 'cinemat'],
+  caterer: ['caterer', 'catering', 'food', 'chaat', 'bartend', 'cake'],
+  decorator: ['decor'],
+  dj: ['dj'],
+  band: ['band', 'orchestra', 'entertainment'],
+  'makeup-artist': ['makeup', 'grooming', 'beauty and wellness'],
+  'mehendi-artist': ['mehendi', 'mehndi'],
+  florist: ['florist', 'flower'],
+  choreographer: ['choreograph'],
+  invitation: ['invit', 'card', 'stationery'],
+  transport: ['transport', 'cab', 'car rental'],
+  security: ['security'],
+  hospitality: ['venue', 'banquet', 'hall', 'hotel', 'resort', 'lawn', 'farmhouse', 'mandapam', 'hospitality'],
+  'light-sound': ['light', 'sound', 'audio', 'led'],
+  furniture: ['furniture', 'seating'],
+  tent: ['tent', 'shamiana'],
+  artist: ['artist', 'performer'],
+  'priest-pandit': ['pandit', 'priest', 'purohit']
+};
+
+// Falls back to FALLBACK_CATEGORY when nothing matches confidently —
+// callers can always override with an explicit `category` where one is
+// available.
 export const mapMarketplaceCategoryToVendorCategory = (categoryName?: string): WeddingVendorCategory => {
-  if (!categoryName) return 'others';
+  if (!categoryName) return FALLBACK_CATEGORY;
 
   const name = categoryName.toLowerCase();
 
-  const keywordMap: Record<WeddingVendorCategory, string[]> = {
-    catering: ['catering', 'caterer', 'food'],
-    photography: ['photo', 'video', 'cinemat'],
-    decoration: ['decor', 'florist', 'flower', 'mandap'],
-    music: ['music', 'dj', 'band', 'sangeet', 'orchestra'],
-    venue: ['venue', 'banquet', 'hall', 'hotel', 'resort', 'lawn', 'farmhouse'],
-    invitations: ['invit', 'card', 'stationery'],
-    logistics: ['transport', 'logistic', 'cab', 'car rental'],
-    others: []
-  };
-
-  for (const category of WEDDING_VENDOR_CATEGORIES) {
-    if (category === 'others') continue;
-    if (keywordMap[category].some((keyword) => name.includes(keyword))) {
+  for (const category of VENDOR_CATEGORIES) {
+    if (KEYWORD_MAP[category].some((keyword) => name.includes(keyword))) {
       return category;
     }
   }
 
-  return 'others';
+  return FALLBACK_CATEGORY;
 };

@@ -6,6 +6,7 @@ import { connectDatabase } from '../config/database';
 import { Plan } from '../models/plan.model';
 import { VendorCategory } from '../models/vendor-category.model';
 import { Banner } from '../models/banner.model';
+import { Blog, BlogTag } from '../models/blog.model';
 import { User } from '../models/user.model';
 import logger from '../utils/logger';
 
@@ -313,11 +314,240 @@ async function seedBanners(): Promise<void> {
   }
 }
 
+// --- Blog / wedding-journal posts -------------------------------------------
+// One-time migration of the old static article array (previously hardcoded
+// in apnautasav_frontend/lib/blog-data.ts) into the database, now that
+// /blogs is served from the API. `category` there -> `tag` here (same
+// values, see BlogTag); `id` there -> `slug` here. Idempotent — upserted by
+// slug, so re-running never duplicates or clobbers a since-edited post
+// (only fills in ones that don't exist yet, like the other seeds above).
+// `order` preserves the original array's curated ordering.
+
+interface BlogSeed {
+  slug: string;
+  tag: BlogTag;
+  title: string;
+  excerpt: string;
+  body: string[];
+  author: string;
+  date: string;
+  readTime: string;
+  featured?: boolean;
+  order: number;
+}
+
+const BLOG_SEEDS: BlogSeed[] = [
+  {
+    slug: 'family-planning-timeline',
+    tag: BlogTag.Planning,
+    title: "The Family Wedding Timeline: Who Owns What, From Rishta to Reception",
+    excerpt:
+      "Twelve months, six family roles, one shared plan. Here's how to split the work across parents, siblings and the couple without anyone quietly burning out by month nine.",
+    body: [
+      "Most wedding timelines are written for one person to follow. Real Indian weddings are run by five or six — parents on one side, siblings on the other, an aunt who's \"handling the pandit,\" and the couple somewhere in the middle trying to keep everyone pointed the same direction.",
+      "Break the twelve months into three blocks instead of a single long list: the first four months are for decisions only parents can make (budget ceiling, guest count, venue city); the middle four are for vendors and logistics anyone can own; the last four are for the checklist items that need daily attention. Assign each block to a person, not a task list, and give them a shared budget and guest sheet so nobody is planning against numbers that changed two weeks ago.",
+    ],
+    author: 'ApnaUtsav Editorial',
+    date: 'Updated 18 Aug 2026',
+    readTime: '9 min read',
+    featured: true,
+    order: 0,
+  },
+  {
+    slug: '40-ways-to-trim-costs',
+    tag: BlogTag.Budget,
+    title: '40 Ways Families Are Trimming Wedding Costs Without Cutting the Baraat Short',
+    excerpt:
+      'Real savings 2,400+ ApnaUtsav families found once every rupee was tracked in one place — from guest-list math to knowing which vendor quote to push back on.',
+    body: [
+      "The families who spend less rarely cut the wedding down — they cut the guesswork out. Once every quote, deposit and \"we'll settle later\" promise lives in one shared budget, patterns show up fast: the caterer's per-plate rate creeping up with every phone call, the décor \"package\" that's really three separate line items.",
+      'The savings in this list sort into three buckets: renegotiating (get everything in writing before the advance), rescheduling (weekday and off-season dates cut venue rates by 15–30%), and reallocating (spend where guests notice — food and photos — and trim where they don\'t).',
+    ],
+    author: 'Ananya Kapoor',
+    date: 'Updated 12 Aug 2026',
+    readTime: '7 min read',
+    featured: true,
+    order: 1,
+  },
+  {
+    slug: '25-vendor-questions',
+    tag: BlogTag.Vendors,
+    title: '25 Questions to Ask Any Vendor Before You Pay the Advance',
+    excerpt:
+      "A checklist for whoever's 'handling the caterer' this month — so nothing gets promised twice, paid for twice, or forgotten until the week of.",
+    body: [
+      'Every family has a vendor story that starts with "we assumed" — the caterer assumed vegetarian-only, the decorator assumed the mandap colour matched the invites, the photographer assumed drone shots were included. None of it was written down.',
+      'These questions exist to move assumptions into a contract before any advance changes hands: what\'s included per plate, what counts as an "extra guest," what happens to the deposit if the date shifts, and who signs off on the final look before setup day. Ask them once, in writing, and share the answers with whoever in the family is paying that vendor.',
+    ],
+    author: 'Rohan Mehta',
+    date: 'Updated 5 Aug 2026',
+    readTime: '6 min read',
+    featured: true,
+    order: 2,
+  },
+  {
+    slug: 'saat-phere-explained',
+    tag: BlogTag.Rituals,
+    title: 'Saat Phere, Explained: The Meaning Behind the Seven Sacred Vows',
+    excerpt: "What each of the seven steps around the fire actually promises — written for the guests who've only ever watched.",
+    body: [
+      'The seven steps around the sacred fire are often translated loosely as "promises" — food, strength, prosperity, happiness, children, companionship, and friendship — but each phera is a specific commitment, spoken as the couple\'s feet move together in the same direction for the first time.',
+      "For guests watching without a priest's running commentary, the pace can feel long. Knowing that each round marks a different promise — and that the bride leads some rounds while the groom leads others, depending on regional tradition — turns a repetitive-looking ritual into seven distinct, readable moments.",
+    ],
+    author: 'Priya Nair',
+    date: '16 Aug 2026',
+    readTime: '5 min read',
+    order: 3,
+  },
+  {
+    slug: '50-mehndi-designs',
+    tag: BlogTag.Beauty,
+    title: '50 Mehndi Design Ideas for the Bride and Every Sister Standing Next to Her',
+    excerpt: 'From bridal full-hand patterns to quick guest designs the mehendi artist can finish in ten minutes flat.',
+    body: [
+      "Bridal mehendi has two audiences: the camera, which wants full-hand coverage and fine detail that photographs well from across the room, and the bride's hand two days later, which needs to still move freely enough to hold a coconut, a plate, and a hundred handshakes.",
+      'This roundup splits patterns by hand commitment — full bridal (3+ hours), half-hand for sisters and cousins standing in every photo, and 10-minute guest designs the artist can do assembly-line style once the bridal party is done.',
+    ],
+    author: 'Simran Kaur',
+    date: '14 Aug 2026',
+    readTime: '8 min read',
+    order: 4,
+  },
+  {
+    slug: 'guest-list-everyone-agrees-on',
+    tag: BlogTag.Guests,
+    title: 'Building a Guest List Your Whole Family Can Actually Agree On',
+    excerpt:
+      "A framework for the 'but we have to invite them' conversation, plus a shared list every side of the family can edit without a group-chat war.",
+    body: [
+      'The guest list argument is rarely about the guests — it\'s about who gets to decide. Once both families are adding names to the same sheet in real time, the fight moves from "why weren\'t they invited" to "we\'re at 420, who\'s coming off."',
+      "Give each side of the family its own named block within the shared total, let them fill it however they want, and keep a visible running count everyone can see. Most families find the list settles itself once the number, not the names, becomes the constraint.",
+    ],
+    author: 'ApnaUtsav Editorial',
+    date: '11 Aug 2026',
+    readTime: '6 min read',
+    order: 5,
+  },
+  {
+    slug: 'sangeet-run-of-show',
+    tag: BlogTag.Sangeet,
+    title: 'What Actually Happens at a Sangeet: A Night-by-Night Run of Show',
+    excerpt: 'Song order, surprise acts, and the one rehearsal everyone skips — a planning guide for the family choreography group chat.',
+    body: [
+      'A sangeet that runs on "we\'ll figure out the order on the night" is the single most common cause of a 1 a.m. finish. The families who pull it off treat it like a small production: a written run-of-show, a rehearsal for anything with more than four dancers, and a stage manager who isn\'t also performing.',
+      "The order that works most often: a warm-up group number, individual family acts building in energy, the couple's surprise number placed two-thirds through (not last — people are tired by then), then an open-floor finale everyone can join without choreography.",
+    ],
+    author: 'Karan Bhatia',
+    date: '9 Aug 2026',
+    readTime: '7 min read',
+    order: 6,
+  },
+  {
+    slug: 'post-wedding-getaways-2026',
+    tag: BlogTag.Honeymoon,
+    title: '8 Post-Wedding Getaways Indian Couples Are Booking for Winter 2026',
+    excerpt: "Short-haul, long-haul and everything in between — with rough budgets so you can plan the trip before the wedding fatigue sets in.",
+    body: [
+      'Booking the honeymoon during wedding planning, not after, is the difference between a trip and a nap. Couples who lock dates and tickets three to four months out get better fares and don\'t lose the week to recovering from the wedding itself.',
+      'For winter 2026, short-haul options like the Maldives and Bali are seeing the earliest price jumps for December departures, while longer trips to Japan and New Zealand are pricing better for a January start, once the peak-season surcharge drops.',
+    ],
+    author: 'Meher Sethi',
+    date: '6 Aug 2026',
+    readTime: '6 min read',
+    order: 7,
+  },
+  {
+    slug: '6-3-3-checklist',
+    tag: BlogTag.Planning,
+    title: 'The 6-Month, 3-Month, 3-Week Wedding Checklist Every Family Actually Follows',
+    excerpt: 'The version of the checklist that survives contact with real relatives, real vendors, and one very opinionated aunt.',
+    body: [
+      'Most wedding checklists fail the same way: they\'re written as one long list in date order, so a family member opens it, sees eighty unchecked items, and closes it again. Splitting it into three horizons — 6 months, 3 months, 3 weeks — makes each stage feel finishable.',
+      'The 6-month list is decisions (venue, date, budget ceiling); the 3-month list is bookings (vendors, outfits, invites); the 3-week list is logistics (final counts, seating, day-of contacts). Nothing on the 3-week list should require a decision — by then, everything should just need doing.',
+    ],
+    author: 'ApnaUtsav Editorial',
+    date: '3 Aug 2026',
+    readTime: '8 min read',
+    order: 8,
+  },
+  {
+    slug: 'indoor-vs-outdoor-mandap',
+    tag: BlogTag.Vendors,
+    title: 'Indoor vs Outdoor Mandap: What Changes for Weather, Sound and Your Photographer',
+    excerpt: "The tradeoffs venues rarely spell out until you're already signing the contract.",
+    body: [
+      "An outdoor mandap photographs beautifully until 40% humidity turns the priest's microphone into static and a breeze relocates the flower petals mid-ceremony. Indoor venues trade that risk for a flatter, more controllable light that photographers have to work harder to make dramatic.",
+      "The deciding factor is usually less about weather and more about sound: an open-air mandap needs a proper PA system for the mantras to reach guests past the second row, while an indoor hall's acoustics can make even a soft-spoken pandit audible without one.",
+    ],
+    author: 'Rohan Mehta',
+    date: '30 Jul 2026',
+    readTime: '5 min read',
+    order: 9,
+  },
+  {
+    slug: 'where-budgets-actually-go',
+    tag: BlogTag.Budget,
+    title: "Where Wedding Budgets Actually Go: A Breakdown From ApnaUtsav's Planned Weddings",
+    excerpt: 'Venue, catering, décor, fashion — the real split families track, and where the overspend usually sneaks in.',
+    body: [
+      'Across weddings planned on ApnaUtsav, venue and catering together consistently take the largest single share of the budget — usually 40–50% combined — with décor and photography splitting most of what\'s left.',
+      'The overspend rarely happens in the big categories, where families negotiate hardest; it happens in the ones nobody assigns a line item to — flowers for the mehendi, return gifts, last-minute alterations. Budgeting a fixed "miscellaneous" bucket up front, rather than letting it grow by subtraction, is the single change that keeps families closest to their number.',
+    ],
+    author: 'Ananya Kapoor',
+    date: '27 Jul 2026',
+    readTime: '6 min read',
+    order: 10,
+  },
+  {
+    slug: 'rsvp-etiquette-2026',
+    tag: BlogTag.Guests,
+    title: "RSVP Etiquette for 2026: How to Track Who's Actually Coming, Politely",
+    excerpt: "Digital invites made replying easier and tracking harder. Here's how families are closing that gap.",
+    body: [
+      "A digital invite makes it effortless to say yes and just as effortless to never reply at all — there's no physical card sitting on a counter as a reminder. Families end up guessing final counts days before the caterer needs them.",
+      'Setting a clear RSVP deadline inside the invite, following up once with a real message (not another mass forward) a week before that deadline, and tracking replies in one shared list rather than three people\'s individual texts closes most of the gap.',
+    ],
+    author: 'Priya Nair',
+    date: '22 Jul 2026',
+    readTime: '5 min read',
+    order: 11,
+  },
+  {
+    slug: 'haldi-to-reception-guide',
+    tag: BlogTag.Rituals,
+    title: 'Haldi to Reception: A Plain-Language Guide to Every Ceremony in Between',
+    excerpt: 'One page to hand to the out-of-town guests who keep asking what each function actually is.',
+    body: [
+      "For guests attending their first big Indian wedding, the sequence of functions can be genuinely confusing — is the sangeet before or after the mehendi? Is the reception the same day as the wedding? The answer varies by region and family, which is exactly why it's confusing.",
+      'As a rough, widely-used order: haldi and mehendi happen in the days before (often the same day, back to back), sangeet the night before or two nights before, the wedding ceremony itself with rituals like the saat phere, and the reception either that same evening or, increasingly, a separate day entirely.',
+    ],
+    author: 'Simran Kaur',
+    date: '19 Jul 2026',
+    readTime: '9 min read',
+    order: 12,
+  },
+];
+
+async function seedBlogs(): Promise<void> {
+  const attributedUser = (await User.findOne({ role: 'admin' })) || (await User.findOne());
+  const createdBy = attributedUser ? attributedUser._id : undefined;
+
+  for (const seed of BLOG_SEEDS) {
+    await Blog.findOneAndUpdate(
+      { slug: seed.slug },
+      { $setOnInsert: { ...seed, isPublished: true, createdBy } },
+      { upsert: true, new: true }
+    );
+    logger.info(`Blog seeded/verified: ${seed.slug}`);
+  }
+}
+
 async function main(): Promise<void> {
   await connectDatabase();
   await seedPlans();
   await seedVendorCategories();
   await seedBanners();
+  await seedBlogs();
   logger.info('Seeding complete');
   await mongoose.disconnect();
   process.exit(0);
