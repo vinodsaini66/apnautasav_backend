@@ -20,5 +20,9 @@ router.get('/:weddingId/guests/export', checkWeddingAccess, GuestController.expo
 // Digital invitations + guest communication (#2 + #7) — one compose & send
 // system, covers both SMS and email.
 router.post('/:weddingId/guests/compose', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(composeGuestsSchema), GuestController.composeAndSend);
+// Single-guest fetch (dedicated Edit Guest page). Registered after
+// /stats and /export above — those are more specific literal paths that
+// must be matched first, or this `:guestId` wildcard would swallow them.
+router.get('/:weddingId/guests/:guestId', checkWeddingAccess, GuestController.getGuestById);
 
 export default router;

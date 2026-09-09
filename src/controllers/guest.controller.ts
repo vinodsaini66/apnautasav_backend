@@ -179,6 +179,28 @@ export class GuestController {
     }
   }
 
+  // GET /:weddingId/guests/:guestId — single-guest fetch, needed by the
+  // dedicated Edit Guest page (a full guest-list fetch just to populate one
+  // form would be wasteful, and wouldn't work on a direct link/refresh).
+  static async getGuestById(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId, guestId } = req.params;
+
+      const guest = await Guest.findOne({ _id: guestId, weddingId });
+      if (!guest) {
+        ApiResponse.error(res, 404, 'Guest not found');
+        return;
+      }
+
+      const guestWithLink = await attachRsvpLink(guest);
+
+      ApiResponse.success(res, 200, { data: guestWithLink });
+    } catch (error: any) {
+      logger.error('Get guest error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to fetch guest');
+    }
+  }
+
   static async updateGuest(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId, guestId } = req.params;

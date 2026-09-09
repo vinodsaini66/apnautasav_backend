@@ -1,5 +1,29 @@
 import { z } from 'zod';
 
+// Optional per-guest travel/stay details (destination/guest-house weddings).
+// Every level optional — a normal wedding simply never sends this at all.
+// Admin/collaborator-entered only via create/update, never part of
+// rsvpSubmitSchema below (the guest's own self-service submission stays
+// deliberately narrow).
+const guestLogisticsSchema = z.object({
+  accommodation: z.object({
+    roomLabel: z.string().optional(),
+    checkIn: z.string().optional(),
+    checkOut: z.string().optional(),
+    notes: z.string().optional(),
+  }).optional(),
+  transport: z.object({
+    pickupLocation: z.string().optional(),
+    pickupTime: z.string().optional(),
+    vehicleLabel: z.string().optional(),
+    notes: z.string().optional(),
+  }).optional(),
+  meal: z.object({
+    preference: z.enum(['veg', 'non-veg', 'jain', 'vegan', 'other']).optional(),
+    notes: z.string().optional(),
+  }).optional(),
+}).optional();
+
 export const createGuestSchema = z.object({
   body: z.object({
     name: z.string().min(2).max(50),
@@ -14,6 +38,7 @@ export const createGuestSchema = z.object({
     dietaryRestrictions: z.string().optional(),
     seatingPreference: z.string().optional(),
     eventIds: z.array(z.string()).optional(),
+    logistics: guestLogisticsSchema,
   })
 });
 
@@ -31,6 +56,7 @@ export const updateGuestSchema = z.object({
     dietaryRestrictions: z.string().optional(),
     seatingPreference: z.string().optional(),
     eventIds: z.array(z.string()).optional(),
+    logistics: guestLogisticsSchema,
   })
 });
 

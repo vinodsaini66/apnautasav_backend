@@ -8,6 +8,38 @@ export interface IGuestInvitation {
   error?: string;
 }
 
+// Optional per-guest travel/stay details — for destination/guest-house
+// weddings where some (not necessarily all) guests need a room, a ride, or
+// a tracked meal preference. Entirely optional at every level (the whole
+// object, and every field inside each sub-object) so a normal wedding with
+// no accommodation simply never sets this — same shape as Event.location.
+// Admin/collaborator-entered only (via PUT /:weddingId/guests/:guestId),
+// not part of the guest's own public RSVP submission.
+export interface IGuestAccommodation {
+  roomLabel?: string;
+  checkIn?: Date;
+  checkOut?: Date;
+  notes?: string;
+}
+
+export interface IGuestTransport {
+  pickupLocation?: string;
+  pickupTime?: Date;
+  vehicleLabel?: string;
+  notes?: string;
+}
+
+export interface IGuestMeal {
+  preference?: 'veg' | 'non-veg' | 'jain' | 'vegan' | 'other';
+  notes?: string;
+}
+
+export interface IGuestLogistics {
+  accommodation?: IGuestAccommodation;
+  transport?: IGuestTransport;
+  meal?: IGuestMeal;
+}
+
 export interface IGuest extends Document {
   weddingId: mongoose.Types.ObjectId;
   name: string;
@@ -39,6 +71,7 @@ export interface IGuest extends Document {
   rsvpRespondedAt?: Date;
   // Send-tracking log for the compose & send feature (#2 + #7).
   invitations: IGuestInvitation[];
+  logistics?: IGuestLogistics;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -140,6 +173,39 @@ const guestSchema = new Schema<IGuest>({
       }
     ],
     default: []
+  },
+  logistics: {
+    type: {
+      accommodation: {
+        type: {
+          roomLabel: { type: String },
+          checkIn: { type: Date },
+          checkOut: { type: Date },
+          notes: { type: String }
+        },
+        _id: false
+      },
+      transport: {
+        type: {
+          pickupLocation: { type: String },
+          pickupTime: { type: Date },
+          vehicleLabel: { type: String },
+          notes: { type: String }
+        },
+        _id: false
+      },
+      meal: {
+        type: {
+          preference: {
+            type: String,
+            enum: ['veg', 'non-veg', 'jain', 'vegan', 'other']
+          },
+          notes: { type: String }
+        },
+        _id: false
+      }
+    },
+    _id: false
   }
 }, {
   timestamps: true
