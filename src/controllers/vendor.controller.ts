@@ -316,25 +316,44 @@ export class VendorController {
       // more than the token gives it.
       const user = await User.findById(userId);
 
-      await VendorInquiry.create({
-        weddingVendorId: weddingVendor._id,
-        weddingId,
-        userId,
-        fullName: req.body?.fullName || user?.fullName || 'Wedding organizer',
-        phone: req.body?.phone || user?.phoneNumber || req.user?.phoneNumber || '',
-        source: 'wedding_dashboard',
-        status: 'new'
-      });
+      // Best-effort CRM logging, not the point of this endpoint — the
+      // `Vendor` tracker entry above is already committed by this point, so
+      // a failure here must never turn into a 500 for an operation that
+      // actually succeeded (it did, for the caller, the moment `vendor` was
+      // created). `phone` in particular used to fall back only to the
+      // logged-in user's own phone number, which the app's real email+
+      // password signup flow never collects — so it was routinely empty
+      // and threw VendorInquiry's `required` validator for most users.
+      // `weddingVendor.phone` (the marketplace listing's own contact
+      // number, already trusted enough to seed `Vendor.phoneNumber` above)
+      // is a much more reliable fallback than an unset user profile field.
+      try {
+        await VendorInquiry.create({
+          weddingVendorId: weddingVendor._id,
+          weddingId,
+          userId,
+          fullName: req.body?.fullName || user?.fullName || 'Wedding organizer',
+          phone: req.body?.phone || user?.phoneNumber || req.user?.phoneNumber || weddingVendor.phone || '',
+          source: 'wedding_dashboard',
+          status: 'new'
+        });
+      } catch (inquiryError: any) {
+        logger.error('Failed to log vendor inquiry for add-from-marketplace:', inquiryError);
+      }
 
-      await ActivityService.logActivity({
-        weddingId,
-        userId: userId!,
-        actionType: 'created',
-        entityType: 'vendor',
-        entityId: String(vendor._id),
-        entityName: vendor.vendorName,
-        description: `Added vendor from marketplace: ${vendor.vendorName}`
-      });
+      try {
+        await ActivityService.logActivity({
+          weddingId,
+          userId: userId!,
+          actionType: 'created',
+          entityType: 'vendor',
+          entityId: String(vendor._id),
+          entityName: vendor.vendorName,
+          description: `Added vendor from marketplace: ${vendor.vendorName}`
+        });
+      } catch (activityError: any) {
+        logger.error('Failed to log activity for add-from-marketplace:', activityError);
+      }
 
       ApiResponse.success(res, 201, {
         message: 'Vendor added from marketplace successfully',

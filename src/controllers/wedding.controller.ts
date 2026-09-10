@@ -429,27 +429,75 @@ export class WeddingController {
   static async getWeddingStats(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
+      const now = new Date();
+      const weddingObjectId = new mongoose.Types.ObjectId(weddingId);
 
       const [
         guestCount,
         confirmedGuestCount,
+        pendingGuestCount,
         taskCount,
         completedTasks,
+        overdueTasks,
         budgetItems,
         trackedBudgetItems,
         totalSpent,
+        paidAggregate,
+        duePaymentsAggregate,
         vendorCount,
         bookedVendorCount
       ] = await Promise.all([
         Guest.countDocuments({ weddingId }),
         Guest.countDocuments({ weddingId, rsvpStatus: 'confirmed' }),
+        // 'pending' is the only "hasn't answered yet" value — 'declined' is
+        // itself a real response, not a non-response.
+        Guest.countDocuments({ weddingId, rsvpStatus: 'pending' }),
         Task.countDocuments({ weddingId }),
         Task.countDocuments({ weddingId, status: 'completed' }),
+        // Overdue = still actionable (not completed/cancelled) with a due
+        // date already in the past.
+        Task.countDocuments({ weddingId, status: { $nin: ['completed', 'cancelled'] }, dueDate: { $lt: now } }),
         Budget.countDocuments({ weddingId }),
         Budget.countDocuments({ weddingId, actualCost: { $ne: null, $exists: true } }),
         Budget.aggregate([
-          { $match: { weddingId: new mongoose.Types.ObjectId(weddingId) } },
+          { $match: { weddingId: weddingObjectId } },
           { $group: { _id: null, total: { $sum: '$actualCost' } } }
+        ]),
+        // Wedding-wide "amount actually paid so far" — a budget item with
+        // per-installment payments uses the sum of its *paid* installments
+        // (`amountPaid`, kept in sync by BudgetInstallmentService); one with
+        // no installments at all only counts as paid once its own `status`
+        // is 'paid', using actualCost (falling back to estimatedCost) as the
+        // amount paid. This mirrors the same items `totalSpent` already sums,
+        // just filtered down to what's actually been settled.
+        Budget.aggregate([
+          { $match: { weddingId: weddingObjectId } },
+          {
+            $project: {
+              paidAmount: {
+                $cond: [
+                  { $gt: [{ $size: { $ifNull: ['$installments', []] } }, 0] },
+                  { $ifNull: ['$amountPaid', 0] },
+                  {
+                    $cond: [
+                      { $eq: ['$status', 'paid'] },
+                      { $ifNull: ['$actualCost', { $ifNull: ['$estimatedCost', 0] }] },
+                      0
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          { $group: { _id: null, total: { $sum: '$paidAmount' } } }
+        ]),
+        // Installments (per-budget-item payment schedule, usually a vendor
+        // payment) that are still unpaid and already past their due date.
+        Budget.aggregate([
+          { $match: { weddingId: weddingObjectId } },
+          { $unwind: '$installments' },
+          { $match: { 'installments.status': 'pending', 'installments.dueDate': { $lte: now } } },
+          { $count: 'count' }
         ]),
         Vendor.countDocuments({ weddingId }),
         Vendor.countDocuments({ weddingId, bookingStatus: { $in: ['booked', 'confirmed'] } })
@@ -469,12 +517,14 @@ export class WeddingController {
       const stats = {
         guests: {
           total: guestCount,
+          pending: pendingGuestCount,
           rsvpRate: guestCount > 0 ? Number(rsvpRate.toFixed(2)) : 0
         },
         tasks: {
           total: taskCount,
           completed: completedTasks,
           pending: taskCount - completedTasks,
+          overdue: overdueTasks,
           completionRate: taskCount > 0 ? completionRate.toFixed(2) : 0
         },
         budget: {
@@ -483,6 +533,11 @@ export class WeddingController {
           remaining: (wedding?.totalBudget || 0) - (totalSpent[0]?.total || 0),
           items: budgetItems,
           trackedRate: budgetItems > 0 ? Number(trackedRate.toFixed(2)) : 0
+        },
+        payments: {
+          total: wedding?.totalBudget || 0,
+          paid: paidAggregate[0]?.total || 0,
+          dueCount: duePaymentsAggregate[0]?.count || 0
         },
         vendors: {
           total: vendorCount,

@@ -34,15 +34,10 @@ export interface IVendorBranchLocation extends IVendorLocation {
 
 export interface IVendor extends Document {
     vendorId?: mongoose.Types.ObjectId;
-
     businessName: string;
     displayName?: string;
-    // A former business name, for a vendor that's rebranded (e.g. reference
-    // data: "TigerLily" → "Wishco.") — display-only continuity, not used for
-    // search/lookup.
     oldName?: string;
     slug: string;
-
     description?: string;
     shortDescription?: string;
 
@@ -57,21 +52,9 @@ export interface IVendor extends Document {
     website?: string;
 
     location?: IVendorLocation;
-    // Additional branch/service locations beyond the primary `location`
-    // above — see IVendorBranchLocation.
     locations?: IVendorBranchLocation[];
 
-    // Denormalized copy of the vendor's primary category slug (e.g.
-    // "wedding-photographers"), kept alongside the real VendorCategoryMapping
-    // relation (not a replacement for it) so a vendor's category is visible
-    // directly on the document without a join — used by bulk-import scripts
-    // that source data already keyed by a category slug.
     categorySlug?: string;
-
-    // Free-text detail blocks for the profile page's "About" tab — kept
-    // separate from `description` (the vendor's own written bio) since
-    // these are quick-scan facts, not narrative copy. All optional and
-    // display-only; nothing here is used for search/filter.
     profileDetails?: {
         services?: string[]; // e.g. ["Candid Photography", "Traditional Photography", "Pre-Wedding Shoot"]
         workingStyle?: string;
@@ -107,33 +90,17 @@ export interface IVendor extends Document {
     pricing?: {
         startingPrice?: number;
         priceUnit?: 'per day' | 'per function' | 'per plate' | 'per event' | 'starting from';
-        // A separate destination-wedding package rate — kept as free-text
-        // (matches how reference marketplace data itself stores it, e.g.
-        // "65.00 Lakhs" / "/day for 125 rooms") rather than forcing it into
-        // a strict number, since it's usually a package description, not a
-        // clean unit price.
         destinationPrice?: string;
         destinationPriceUnit?: string;
-        // Per-occasion/per-service starting prices, e.g. reference data:
-        // a decorator quoting a separate starting package for "Home
-        // function decor" distinct from their general starting_price.
-        // Generic across categories (a photographer might similarly quote
-        // separate packages per function) — not specific to decorators.
         packages?: {
             label: string;
             startingPrice: number;
         }[];
     };
 
-    // Venue-specific details — present only for vendors in a venue-like
-    // category (banquet halls, resorts, hotels...), harmless/empty for any
-    // other category. Kept minimal per the same "basic details" scope as
-    // the rest of this schema — no attempt to model every possible
-    // per-space/per-hall breakdown a large resort might have.
     venueDetails?: {
         guestCapacityMin?: number;
         guestCapacityMax?: number;
-        // e.g. ["4 Star & Above Hotels", "Banquet Halls", "Resorts"]
         venueTypes?: string[];
         vegPricePerPlate?: number;
         nonVegPricePerPlate?: number;

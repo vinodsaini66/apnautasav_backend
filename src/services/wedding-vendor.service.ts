@@ -152,11 +152,28 @@ export class WeddingVendorService {
 
       /**
        * Category Filter (via VendorCategoryMapping - vendors don't store
-       * their category directly, it's a many-to-many mapping)
+       * their category directly, it's a many-to-many mapping).
+       *
+       * The public directory only ever offers *top-level* category ids as
+       * filter chips (see VendorCategoryService.getPublicCategories /
+       * topLevelOnly), but most real mapping rows were imported tagged to a
+       * *sub-category* id (e.g. "Decorators" under "Planning & Decor") -
+       * see import-wedmegood-vendors.ts's CATEGORY_SLUG_MAP. Matching only
+       * `categoryId` therefore misses every vendor tagged at the child
+       * level whenever a parent category is selected, even though
+       * `parentCategoryId` was already being stored on every mapping row
+       * for exactly this case - it just was never read here. Matching
+       * either field against the requested id covers both a parent-level
+       * selection (matches via parentCategoryId) and a selection that
+       * happens to already be the exact leaf category (matches via
+       * categoryId).
        */
       if (filters?.categoryId) {
         const vendorIds = await VendorCategoryMapping.find({
-          categoryId: filters.categoryId,
+          $or: [
+            { categoryId: filters.categoryId },
+            { parentCategoryId: filters.categoryId },
+          ],
           isActive: true,
         }).distinct('vendorId');
 
