@@ -231,7 +231,7 @@ You can create guests, tasks, budget items, vendors, events, and notes, update a
         }),
         betaZodTool({
           name: 'add_event',
-          description: 'Add a new function/event (e.g. Mehendi, Sangeet, Reception) to this wedding.',
+          description: 'Add a new function/event (e.g. Mehendi, Sangeet, Pheras, Reception — eventType "ceremony" is the Pheras/wedding-vows function) to this wedding.',
           inputSchema: eventInputSchema,
           run: async (input) => {
             const result = await AiTools.addEvent(weddingId, userId, input);

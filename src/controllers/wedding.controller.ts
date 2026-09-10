@@ -30,7 +30,10 @@ const DEFAULT_FUNCTION_TITLES: Record<string, string> = {
   reception: 'Reception',
   engagement: 'Engagement',
   cocktail: 'Cocktail',
-  ceremony: 'Ceremony',
+  // `ceremony` is the actual wedding-vows event — titled "Pheras" to match
+  // the frontend's EVENT_TYPE_META label (lib/event-type-meta.ts) and the
+  // marketing site's journey timeline, which both already call it that.
+  ceremony: 'Pheras',
   other: 'Function'
 };
 
