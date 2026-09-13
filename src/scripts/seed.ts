@@ -8,6 +8,7 @@ import { VendorCategory } from '../models/vendor-category.model';
 import { Banner } from '../models/banner.model';
 import { Blog, BlogTag } from '../models/blog.model';
 import { User } from '../models/user.model';
+import { TaskTemplate } from '../models/task-template.model';
 import logger from '../utils/logger';
 
 // Idempotent — safe to run repeatedly (e.g. on every deploy). Upserts by
@@ -542,12 +543,62 @@ async function seedBlogs(): Promise<void> {
   }
 }
 
+// Ready-made checklist templates (#23) — deliberately not tied to any one
+// wedding or user; every account sees these by default (isSystemTemplate),
+// the same for a family planning their first wedding and (later) a
+// planner account managing many. `dueOffsetDays` is relative to the
+// wedding's own weddingDate, mostly negative (before the big day).
+// Idempotent — upserted by `key`, so re-running this script never
+// clobbers anything.
+const TASK_TEMPLATE_SEEDS = [
+  {
+    key: 'standard-indian-wedding',
+    name: 'Standard Indian Wedding Checklist',
+    description:
+      'A general-purpose checklist covering the essentials for a multi-day Indian wedding, from venue booking to the big day.',
+    isSystemTemplate: true,
+    items: [
+      { title: 'Book the wedding venue', category: 'venue', priority: 'urgent' as const, dueOffsetDays: -120 },
+      { title: 'Finalize guest list', category: 'others', priority: 'high' as const, dueOffsetDays: -90 },
+      { title: 'Book photographer & videographer', category: 'photography', priority: 'high' as const, dueOffsetDays: -90 },
+      { title: 'Shortlist and book caterer', category: 'catering', priority: 'high' as const, dueOffsetDays: -75 },
+      { title: 'Send invitations', category: 'invitations', priority: 'high' as const, dueOffsetDays: -45 },
+      { title: 'Finalize decoration theme', category: 'decoration', priority: 'medium' as const, dueOffsetDays: -45 },
+      { title: 'Book DJ / live music', category: 'music', priority: 'medium' as const, dueOffsetDays: -30 },
+      { title: 'Arrange guest travel & accommodation', category: 'logistics', priority: 'high' as const, dueOffsetDays: -21 },
+      { title: 'Confirm final headcount with caterer', category: 'catering', priority: 'urgent' as const, dueOffsetDays: -7 },
+      { title: 'Pack essentials for the big day', category: 'others', priority: 'medium' as const, dueOffsetDays: -2 },
+      { title: 'Send thank-you notes to guests', category: 'others', priority: 'low' as const, dueOffsetDays: 7 }
+    ]
+  },
+  {
+    key: 'mehendi-ceremony',
+    name: 'Mehendi Ceremony Checklist',
+    description: 'Everything for a Mehendi function specifically — apply once you know its date.',
+    isSystemTemplate: true,
+    items: [
+      { title: 'Book mehendi artist(s)', category: 'others', priority: 'high' as const, dueOffsetDays: -30, eventType: 'mehendi' },
+      { title: 'Arrange mehendi-function decor', category: 'decoration', priority: 'medium' as const, dueOffsetDays: -14, eventType: 'mehendi' },
+      { title: 'Plan mehendi-function menu', category: 'catering', priority: 'medium' as const, dueOffsetDays: -14, eventType: 'mehendi' },
+      { title: 'Arrange seating & shade for mehendi guests', category: 'logistics', priority: 'medium' as const, dueOffsetDays: -7, eventType: 'mehendi' }
+    ]
+  }
+];
+
+async function seedTaskTemplates(): Promise<void> {
+  for (const seed of TASK_TEMPLATE_SEEDS) {
+    await TaskTemplate.findOneAndUpdate({ key: seed.key }, { $setOnInsert: seed }, { upsert: true, new: true });
+    logger.info(`Task template seeded/verified: ${seed.key}`);
+  }
+}
+
 async function main(): Promise<void> {
   await connectDatabase();
   await seedPlans();
   await seedVendorCategories();
   await seedBanners();
   await seedBlogs();
+  await seedTaskTemplates();
   logger.info('Seeding complete');
   await mongoose.disconnect();
   process.exit(0);

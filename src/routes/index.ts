@@ -15,6 +15,7 @@ import notificationRoutes from './notification.routes';
 import commentRoutes from './comment.routes';
 import noteRoutes from './note.routes';
 import userRoutes from './user.routes';
+import taskTemplateRoutes from './task-template.routes';
 import weddingVendorRoutes from './wedding-vendor.routes';
 import vendorAlbumRoutes from './vendor-album.routes';
 import vendorMediaRoutes from './vendor-media.routes';
@@ -35,6 +36,8 @@ router.use('/auth', authRoutes);
 // applies authMiddleware to everything it exports).
 router.use('/rsvp', rsvpRoutes);
 router.use('/me', userRoutes);
+// NOT wedding-scoped — see task-template.routes.ts for why.
+router.use('/task-templates', taskTemplateRoutes);
 router.use('/weddings', weddingRoutes);
 router.use('/weddings', guestRoutes);
 router.use('/weddings', taskRoutes);

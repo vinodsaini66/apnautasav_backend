@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Task, ITask } from '../models/task.model';
 import { Collaborator } from '../models/collaborator.model';
+import { TaskTemplate } from '../models/task-template.model';
+import { Wedding } from '../models/wedding.model';
+import { WeddingEvent } from '../models/event.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
@@ -739,6 +742,127 @@ export class TaskController {
     } catch (error: any) {
       logger.error('Export tasks error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to export tasks');
+    }
+  }
+
+  /**
+   * POST /:weddingId/tasks/apply-template/:templateId — checklist
+   * templates (gap #23). Clones every item on the template into a real
+   * Task for this wedding: each item's dueOffsetDays is resolved against
+   * the wedding's own weddingDate, and an item tagged with an eventType is
+   * auto-linked to whichever Event of that type already exists on this
+   * wedding (left untagged — task still created — if none does).
+   *
+   * Same batch-aware plan-limit handling as
+   * GuestController.bulkImportGuests: a template that would push past the
+   * plan's task limit is applied as far as it fits, with the remaining
+   * items reported back as skipped rather than failing the whole request.
+   */
+  static async applyTemplate(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId, templateId } = req.params;
+      const userId = req.user?.userId;
+
+      const wedding = await Wedding.findById(weddingId).select('weddingDate');
+      if (!wedding) {
+        ApiResponse.error(res, 404, 'Wedding not found');
+        return;
+      }
+
+      // A template is usable here if it's a shared system preset, or one
+      // this user created themselves — same visibility rule as
+      // TaskTemplateController.getTemplates.
+      const template = await TaskTemplate.findOne({
+        _id: templateId,
+        $or: [{ isSystemTemplate: true }, { createdBy: userId }]
+      });
+      if (!template) {
+        ApiResponse.error(res, 404, "Template not found, or you don't have access to it");
+        return;
+      }
+
+      const ownerId = await PlanResolutionService.getWeddingOwner(weddingId);
+      if (!ownerId) {
+        ApiResponse.error(res, 404, 'Wedding not found');
+        return;
+      }
+      const effective = await PlanResolutionService.getEffectivePlanForWedding(ownerId, weddingId);
+      const limit = effective.limits.tasks;
+
+      let allowedCount = template.items.length;
+      if (limit !== UNLIMITED) {
+        const usage = await PlanResolutionService.getCurrentUsage(weddingId);
+        allowedCount = Math.max(0, limit - usage.tasks);
+      }
+
+      // Pre-fetch this wedding's events once so each item's optional
+      // eventType lookup is an in-memory map lookup, not a query per item.
+      const events = await WeddingEvent.find({ weddingId }).select('eventType').lean();
+      const eventIdByType = new Map<string, mongoose.Types.ObjectId>();
+      events.forEach((event) => {
+        if (!eventIdByType.has(event.eventType)) {
+          eventIdByType.set(event.eventType, event._id as mongoose.Types.ObjectId);
+        }
+      });
+
+      const applied = template.items.slice(0, allowedCount);
+      const skipped = template.items.slice(allowedCount);
+
+      const toCreate = applied.map((item) => ({
+        weddingId,
+        createdBy: userId,
+        title: item.title,
+        description: item.description,
+        category: item.category,
+        priority: item.priority,
+        status: 'pending',
+        dueDate: new Date(wedding.weddingDate.getTime() + item.dueOffsetDays * 24 * 60 * 60 * 1000),
+        eventId: item.eventType ? eventIdByType.get(item.eventType) : undefined
+      }));
+
+      const created = toCreate.length > 0 ? await Task.insertMany(toCreate) : [];
+
+      const results = [
+        ...created.map((task) => ({ title: task.title, created: true as const })),
+        ...skipped.map((item) => ({
+          title: item.title,
+          created: false as const,
+          reason: `Skipped — plan task limit (${limit}) reached`
+        }))
+      ];
+
+      if (created.length > 0) {
+        try {
+          await ActivityService.logActivity({
+            weddingId,
+            userId: userId!,
+            actionType: 'created',
+            entityType: 'task',
+            description: `Applied checklist template "${template.name}" — ${created.length} task(s) added`
+          });
+        } catch (activityError) {
+          logger.warn('Failed to log apply-template activity:', activityError);
+        }
+
+        try {
+          const socketServer = getSocketServer();
+          socketServer.emitToWedding(weddingId, 'task:template-applied', {
+            templateName: template.name,
+            count: created.length,
+            timestamp: new Date()
+          });
+        } catch (socketError) {
+          logger.warn('Socket notification failed:', socketError);
+        }
+      }
+
+      ApiResponse.success(res, 201, {
+        message: `Added ${created.length} of ${template.items.length} task(s) from "${template.name}"`,
+        data: { results, createdCount: created.length, skippedCount: skipped.length }
+      });
+    } catch (error: any) {
+      logger.error('Apply task template error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to apply template');
     }
   }
 }

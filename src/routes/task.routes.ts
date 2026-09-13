@@ -12,6 +12,12 @@ const router: Router = Router();
 router.use(authMiddleware);
 
 router.post('/:weddingId/tasks', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), checkResourceLimit('tasks'), validate(createTaskSchema), TaskController.createTask);
+// Checklist/task templates (#23) — apply a template's items as real tasks
+// on this wedding in one action. No checkResourceLimit here (that
+// middleware only knows how to gate a single-row create) — the controller
+// itself enforces the plan's task limit across the whole batch, same
+// pattern as GuestController.bulkImportGuests.
+router.post('/:weddingId/tasks/apply-template/:templateId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), TaskController.applyTemplate);
 router.get('/:weddingId/tasks', checkWeddingAccess, TaskController.getTasks);
 router.get('/:weddingId/tasks/assigned-to-me', checkWeddingAccess, TaskController.getMyTasks);
 router.get('/:weddingId/tasks/export', checkWeddingAccess, TaskController.exportTasks);
