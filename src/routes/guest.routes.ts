@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth.middleware';
 import { checkWeddingAccess, checkPermission } from '../middleware/authorization.middleware';
 import { checkResourceLimit } from '../middleware/planLimit.middleware';
 import { validate } from '../middleware/validation.middleware';
-import { createGuestSchema, updateGuestSchema, composeGuestsSchema } from '../validators/guest.validator';
+import { createGuestSchema, updateGuestSchema, composeGuestsSchema, bulkImportGuestsSchema } from '../validators/guest.validator';
 import { CollaboratorRole } from '../types';
 
 const router: Router = Router();
@@ -20,6 +20,10 @@ router.get('/:weddingId/guests/export', checkWeddingAccess, GuestController.expo
 // Digital invitations + guest communication (#2 + #7) — one compose & send
 // system, covers both SMS and email.
 router.post('/:weddingId/guests/compose', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(composeGuestsSchema), GuestController.composeAndSend);
+// Bulk CSV import — no checkResourceLimit here (that middleware only knows
+// how to gate a single-row create); the controller itself enforces the
+// plan's guest limit across the whole batch.
+router.post('/:weddingId/guests/bulk-import', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(bulkImportGuestsSchema), GuestController.bulkImportGuests);
 // Single-guest fetch (dedicated Edit Guest page). Registered after
 // /stats and /export above — those are more specific literal paths that
 // must be matched first, or this `:guestId` wildcard would swallow them.

@@ -18,7 +18,7 @@ export const createWeddingSchema = z.object({
     name: z.string().min(2).max(200),
     location: z.string().min(2).max(200),
     totalBudget: z.number().positive(),
-    currency: z.enum(['INR', 'USD', 'EUR', 'GBP']).optional(),
+    currency: z.enum(['INR', 'USD', 'GBP', 'EUR', 'CAD', 'AUD', 'AED']).optional(),
     description: z.string().max(500).optional(),
     imageUrl: z.string().url().optional(),
     functions: z.array(weddingFunctionSchema).optional()
@@ -33,7 +33,7 @@ export const updateWeddingSchema = z.object({
     name: z.string().min(2).max(200),
     location: z.string().min(2).max(200),
     totalBudget: z.number().positive(),
-    currency: z.enum(['INR', 'USD', 'EUR', 'GBP']).optional(),
+    currency: z.enum(['INR', 'USD', 'GBP', 'EUR', 'CAD', 'AUD', 'AED']).optional(),
     status: z.enum(['planning', 'ongoing', 'completed']).optional(),
     description: z.string().max(500).optional(),
     imageUrl: z.string().url().optional()

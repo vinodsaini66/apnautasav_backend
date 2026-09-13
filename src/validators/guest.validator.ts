@@ -73,6 +73,23 @@ export const rsvpSubmitSchema = z.object({
   })
 });
 
+// POST /:weddingId/guests/bulk-import — CSV/bulk guest import. Deliberately
+// loose (every field optional, no enum/email format enforcement here): a
+// real CSV a family exports from Excel/Google Contacts is messy (a
+// "Category" column with "Family " or blank, a phone number with dashes),
+// and one bad row shouldn't zod-reject the whole batch before the
+// controller even gets a chance to sanitize row-by-row and report which
+// specific rows failed. GuestController.bulkImportGuests does the real
+// per-row validation/defaulting.
+export const bulkImportGuestsSchema = z.object({
+  body: z.object({
+    guests: z
+      .array(z.record(z.string(), z.any()))
+      .min(1, 'At least one guest row is required')
+      .max(500, 'A single import is limited to 500 guests at a time'),
+  })
+});
+
 // POST /:weddingId/guests/compose — digital invitations + guest
 // communication (#2 + #7).
 export const composeGuestsSchema = z.object({

@@ -66,7 +66,10 @@ const weddingSchema = new Schema<IWedding>({
   currency: {
     type: String,
     default: 'INR',
-    enum: ['INR', 'USD', 'EUR', 'GBP']
+    // NRI-friendly: covers India plus the destinations most NRI families
+    // planning a wedding back home are actually paying from/in (US, UK,
+    // Canada, Australia, Gulf, Eurozone).
+    enum: ['INR', 'USD', 'GBP', 'EUR', 'CAD', 'AUD', 'AED']
   },
   createdBy: {
     type: Schema.Types.ObjectId,

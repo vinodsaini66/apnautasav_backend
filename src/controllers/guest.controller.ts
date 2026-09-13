@@ -13,6 +13,18 @@ import { ensurePublicSlug } from '../utils/generateCode';
 import { renderTemplate } from '../utils/template.util';
 import logger from '../utils/logger';
 import { getSocketServer } from '../config/socket';
+import { PlanResolutionService, UNLIMITED } from '../services/plan-resolution.service';
+
+const GUEST_CATEGORIES = ['family', 'friends', 'colleagues', 'others'];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface BulkImportRowResult {
+  row: number;
+  success: boolean;
+  name?: string;
+  guestId?: string;
+  error?: string;
+}
 
 const GUEST_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'name', label: 'Name' },
@@ -489,6 +501,146 @@ export class GuestController {
     } catch (error: any) {
       logger.error('Compose guests error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to send invitations');
+    }
+  }
+
+  /**
+   * POST /:weddingId/guests/bulk-import — CSV/bulk guest import. The
+   * frontend parses the CSV client-side (or builds rows from picked device
+   * contacts) and posts plain JSON rows here; this is what actually does
+   * the per-row validation/normalization/plan-limit enforcement, so a
+   * messy real-world CSV (blank category, "yes"/"true" VIP flags as
+   * strings, stray whitespace) degrades gracefully row-by-row instead of
+   * rejecting the whole batch. Every row gets a result — success or a
+   * specific reason — so the UI can show exactly which rows didn't make it.
+   */
+  static async bulkImportGuests(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const userId = req.user?.userId;
+      const rows = (req.body.guests || []) as Array<Record<string, any>>;
+
+      // Plan-limit enforcement mirrors checkResourceLimit, but for a batch:
+      // current usage + however many of these rows we can still fit, not a
+      // single-row current >= limit check.
+      const ownerId = await PlanResolutionService.getWeddingOwner(weddingId);
+      if (!ownerId) {
+        ApiResponse.error(res, 404, 'Wedding not found');
+        return;
+      }
+      const effective = await PlanResolutionService.getEffectivePlanForWedding(ownerId, weddingId);
+      const limit = effective.limits.guests;
+
+      let allowedCount = rows.length;
+      if (limit !== UNLIMITED) {
+        const usage = await PlanResolutionService.getCurrentUsage(weddingId);
+        allowedCount = Math.max(0, limit - usage.guests);
+      }
+
+      const results: BulkImportRowResult[] = [];
+      const toInsert: { index: number; doc: Record<string, any> }[] = [];
+
+      rows.forEach((raw, index) => {
+        if (index >= allowedCount) {
+          results.push({
+            row: index + 1,
+            success: false,
+            name: raw?.name ? String(raw.name).trim() : undefined,
+            error: `Skipped — plan guest limit (${limit}) reached`
+          });
+          return;
+        }
+
+        const name = String(raw?.name ?? '').trim();
+        if (!name) {
+          results.push({ row: index + 1, success: false, error: 'Missing name — row skipped' });
+          return;
+        }
+
+        const categoryRaw = String(raw?.category ?? '').trim().toLowerCase();
+        const category = GUEST_CATEGORIES.includes(categoryRaw) ? categoryRaw : 'others';
+
+        const email = String(raw?.email ?? '').trim().toLowerCase();
+        const plusOneNum = Number(raw?.plusOne);
+        const isVIPRaw = String(raw?.isVIP ?? '').trim().toLowerCase();
+
+        toInsert.push({
+          index,
+          doc: {
+            weddingId,
+            addedBy: userId,
+            name,
+            category,
+            phoneNumber: raw?.phoneNumber ? String(raw.phoneNumber).trim() : undefined,
+            email: EMAIL_RE.test(email) ? email : undefined,
+            address: raw?.address ? String(raw.address).trim() : undefined,
+            plusOne: Number.isFinite(plusOneNum) && plusOneNum > 0 ? Math.floor(plusOneNum) : 0,
+            isVIP: raw?.isVIP === true || isVIPRaw === 'yes' || isVIPRaw === 'true',
+            notes: raw?.notes ? String(raw.notes).trim() : undefined,
+          }
+        });
+      });
+
+      // Individual creates (not insertMany) so one bad row's validation
+      // error never aborts the rest of the batch, and each row keeps its
+      // own success/failure result — same isolation pattern composeAndSend
+      // above uses per-guest for sends.
+      const settled = await Promise.allSettled(toInsert.map((t) => Guest.create(t.doc)));
+
+      settled.forEach((outcome, i) => {
+        const { index, doc } = toInsert[i];
+        if (outcome.status === 'fulfilled') {
+          results.push({
+            row: index + 1,
+            success: true,
+            name: outcome.value.name,
+            guestId: String(outcome.value._id)
+          });
+        } else {
+          const reason: any = outcome.reason;
+          results.push({
+            row: index + 1,
+            success: false,
+            name: doc.name,
+            error: reason?.message || 'Failed to save this guest'
+          });
+        }
+      });
+
+      results.sort((a, b) => a.row - b.row);
+      const successCount = results.filter((r) => r.success).length;
+
+      if (successCount > 0) {
+        try {
+          await ActivityService.logActivity({
+            weddingId,
+            userId: userId!,
+            actionType: 'created',
+            entityType: 'guest',
+            description: `Bulk imported ${successCount} guest(s)`
+          });
+        } catch (activityError) {
+          logger.warn('Failed to log bulk-import activity:', activityError);
+        }
+
+        try {
+          const socketServer = getSocketServer();
+          socketServer.emitToWedding(weddingId, 'guest:bulk-imported', {
+            count: successCount,
+            timestamp: new Date()
+          });
+        } catch (socketError) {
+          logger.warn('Socket notification failed:', socketError);
+        }
+      }
+
+      ApiResponse.success(res, 201, {
+        message: `Imported ${successCount} of ${rows.length} guest(s)`,
+        data: { results, successCount, failedCount: rows.length - successCount }
+      });
+    } catch (error: any) {
+      logger.error('Bulk import guests error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to import guests');
     }
   }
 }
