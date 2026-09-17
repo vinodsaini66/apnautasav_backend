@@ -159,6 +159,8 @@ export interface ConsoleFunction {
   budgetSpent: number;
   vendors: { vendorName: string; bookingStatus: string }[];
   hasOverduePayment: boolean;
+  tasksTotal: number;
+  tasksCompleted: number;
 }
 
 export interface ConsoleOverduePayment {
@@ -204,7 +206,7 @@ export async function getConsoleOverview(weddingId: string): Promise<ConsoleOver
     .lean();
   const eventIds = events.map((e) => e._id);
 
-  const [guestCounts, budgetByEvent, vendors, overdueInstallments, guestsPendingCount, guestsPendingNoPhoneCount] =
+  const [guestCounts, budgetByEvent, vendors, overdueInstallments, guestsPendingCount, guestsPendingNoPhoneCount, tasksByEvent] =
     await Promise.all([
       Guest.aggregate([
         { $match: { weddingId: weddingObjectId } },
@@ -256,6 +258,16 @@ export async function getConsoleOverview(weddingId: string): Promise<ConsoleOver
         rsvpStatus: 'pending',
         $or: [{ phoneNumber: { $exists: false } }, { phoneNumber: '' }],
       }),
+      Task.aggregate([
+        { $match: { weddingId: weddingObjectId, eventId: { $ne: null } } },
+        {
+          $group: {
+            _id: '$eventId',
+            total: { $sum: 1 },
+            completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+          },
+        },
+      ]),
     ]);
 
   const guestCountByEvent = new Map<string, number>(
@@ -281,10 +293,17 @@ export async function getConsoleOverview(weddingId: string): Promise<ConsoleOver
       .map((o) => String(o.eventId))
   );
   const eventTitleById = new Map<string, string>(events.map((e) => [String(e._id), e.title]));
+  const tasksByEventMap = new Map<string, { total: number; completed: number }>(
+    tasksByEvent.map((t: { _id: mongoose.Types.ObjectId; total: number; completed: number }) => [
+      String(t._id),
+      { total: t.total, completed: t.completed },
+    ])
+  );
 
   const functions: ConsoleFunction[] = events.map((event) => {
     const id = String(event._id);
     const budget = budgetByEventMap.get(id);
+    const tasks = tasksByEventMap.get(id);
     return {
       _id: id,
       title: event.title,
@@ -297,6 +316,8 @@ export async function getConsoleOverview(weddingId: string): Promise<ConsoleOver
       budgetSpent: budget?.spent ?? 0,
       vendors: vendorsByEvent.get(id) ?? [],
       hasOverduePayment: overdueEventIds.has(id),
+      tasksTotal: tasks?.total ?? 0,
+      tasksCompleted: tasks?.completed ?? 0,
     };
   });
 
