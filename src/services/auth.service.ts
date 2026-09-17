@@ -9,6 +9,7 @@ import { Collaborator } from '../models/collaborator.model';
 import { EmailService } from './email.service';
 
 const EMAIL_VERIFICATION_EXPIRY_HOURS = 24;
+const PASSWORD_RESET_EXPIRY_HOURS = 1;
 const FRONTEND_BASE_URL = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 // Thrown by login() when credentials are correct but the account's email
@@ -102,7 +103,13 @@ export class AuthService {
     };
   }
 
-  static async verifyEmail(token: string): Promise<{ message: string }> {
+  /**
+   * Verifying also logs the user in (returns a token, like login()) — the
+   * link click already proved they own the inbox tied to this account, so
+   * there's no extra security value in making them re-type their password
+   * a second time right after.
+   */
+  static async verifyEmail(token: string): Promise<{ message: string; token: string; refreshToken: string; user: any }> {
     const user = await User.findOne({ emailVerificationToken: token })
       .select('+emailVerificationToken +emailVerificationTokenExpiry');
 
@@ -119,7 +126,86 @@ export class AuthService {
     user.emailVerificationTokenExpiry = undefined;
     await user.save();
 
-    return { message: 'Email verified successfully. You can now log in.' };
+    return {
+      message: "Email verified successfully. You're signed in.",
+      token: this.generateToken(user),
+      refreshToken: this.generateRefreshToken(user),
+      user: {
+        id: user._id,
+        phoneNumber: user.phoneNumber,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role
+      }
+    };
+  }
+
+  /**
+   * Always returns the same generic message regardless of whether the
+   * email exists — same privacy reasoning as resendVerificationEmail below
+   * (don't let this endpoint be used to enumerate registered accounts).
+   */
+  static async forgotPassword(email: string): Promise<{ message: string }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const genericMessage = "If an account with that email exists, we've sent a link to reset the password.";
+
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
+    // No-op for an OTP-only (password-less) account too — there's no
+    // password on file for a reset link to replace.
+    if (!user || !user.password) {
+      return { message: genericMessage };
+    }
+
+    const token = generateVerificationToken();
+    user.passwordResetToken = token;
+    user.passwordResetTokenExpiry = new Date(Date.now() + PASSWORD_RESET_EXPIRY_HOURS * 60 * 60 * 1000);
+    await user.save();
+
+    const resetLink = `${FRONTEND_BASE_URL}/auth/reset-password?token=${token}`;
+    await EmailService.sendPasswordResetEmail(user.email, user.fullName, resetLink);
+
+    return { message: genericMessage };
+  }
+
+  /**
+   * Resetting also logs the user in (returns a token, like login()/
+   * verifyEmail() above) — matches the "Save and sign in" button copy on
+   * the reset-password page.
+   */
+  static async resetPassword(token: string, newPassword: string): Promise<{ message: string; token: string; refreshToken: string; user: any }> {
+    const user = await User.findOne({ passwordResetToken: token })
+      .select('+passwordResetToken +passwordResetTokenExpiry +password');
+
+    if (!user || !user.passwordResetTokenExpiry) {
+      throw new Error('This reset link is invalid or has already been used.');
+    }
+
+    if (new Date() > user.passwordResetTokenExpiry) {
+      throw new Error('This reset link has expired. Please request a new one.');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.passwordResetToken = undefined;
+    user.passwordResetTokenExpiry = undefined;
+    // A password-reset link proves the same inbox ownership signup's
+    // verification link does — flip isVerified too so an account that
+    // somehow never finished verifying isn't left permanently unable to
+    // log in after a legitimate reset.
+    user.isVerified = true;
+    await user.save();
+
+    return {
+      message: "Password updated. You're signed in.",
+      token: this.generateToken(user),
+      refreshToken: this.generateRefreshToken(user),
+      user: {
+        id: user._id,
+        phoneNumber: user.phoneNumber,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role
+      }
+    };
   }
 
   static async resendVerificationEmail(email: string): Promise<{ message: string }> {

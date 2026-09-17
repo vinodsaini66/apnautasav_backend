@@ -12,6 +12,8 @@ export interface IUser extends Document {
   password?: string;
   emailVerificationToken?: string;
   emailVerificationTokenExpiry?: Date;
+  passwordResetToken?: string;
+  passwordResetTokenExpiry?: Date;
   isVerified: boolean;
   role: 'user' | 'admin';
   preferences: {
@@ -67,6 +69,14 @@ const userSchema = new Schema<IUser>({
     select: false
   },
   emailVerificationTokenExpiry: {
+    type: Date,
+    select: false
+  },
+  passwordResetToken: {
+    type: String,
+    select: false
+  },
+  passwordResetTokenExpiry: {
     type: Date,
     select: false
   },

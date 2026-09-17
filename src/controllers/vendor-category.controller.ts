@@ -6,20 +6,21 @@ import { VendorCategoryService } from '../services/vendor-category.service';
 export class VendorCategoryController {
 
     /**
-     * Unauthenticated, active-only, top-level-only, unpaginated (100 is
-     * plenty for a dropdown) — for the public vendor enquiry form. Only
-     * parent categories (parentId: null) are offered, not sub-categories.
+     * Unauthenticated, active-only, top-level-only — feeds both the public
+     * vendor enquiry form's category dropdown and the marketplace's
+     * "Start with what you're looking for" discovery grid (via the
+     * `vendorCount` on each row; the enquiry form dropdown just ignores it).
      */
     static async getPublicCategories(
         _req: Request,
         res: Response
     ): Promise<void> {
         try {
-            const result = await VendorCategoryService.getCategories(1, 100, { isActive: true, topLevelOnly: true });
+            const categories = await VendorCategoryService.getPublicCategoriesWithCounts();
 
             ApiResponse.success(res, 200, {
                 message: 'Vendor categories fetched successfully',
-                data: result.categories,
+                data: categories,
             });
         } catch (error: any) {
             logger.error('Get public vendor categories error:', error);

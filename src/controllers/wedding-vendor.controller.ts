@@ -108,6 +108,7 @@ export class WeddingVendorController {
                 minRating,
                 minReviews,
                 hasAwards,
+                sortBy,
             } = req.query;
 
             const result =
@@ -129,6 +130,7 @@ export class WeddingVendorController {
                         minRating: minRating !== undefined ? Number(minRating) : undefined,
                         minReviews: minReviews !== undefined ? Number(minReviews) : undefined,
                         hasAwards: hasAwards !== undefined ? hasAwards === 'true' : undefined,
+                        sortBy: sortBy as 'recommended' | 'rating' | 'reviews' | 'price_low' | 'price_high' | 'newest' | undefined,
                     }
                 );
 

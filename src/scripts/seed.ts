@@ -14,98 +14,99 @@ import logger from '../utils/logger';
 // Idempotent — safe to run repeatedly (e.g. on every deploy). Upserts by
 // `key`, so an admin's later live edits to price/limits/isActive via the
 // Plan API are never clobbered by re-running this script; it only fills in
-// plans that don't exist yet.
+// plans that don't exist yet. Matches the "Pay once, for one wedding" pricing
+// page (Free / One Wedding / Grand one-time tiers, Planner monthly/yearly
+// subscriptions for people managing weddings that aren't their own).
 const PLAN_SEEDS = [
   {
     key: 'free',
     name: 'Free',
-    description: 'Get started planning one wedding, on us.',
+    description: 'Enough to set the wedding up and see whether it fits how your family plans.',
     type: 'free' as const,
     price: 0,
     currency: 'INR',
     billingPeriod: null,
-    limits: { guests: 50, tasks: 50, vendors: 5, collaborators: 0 },
+    limits: { guests: 50, tasks: 50, vendors: 10, collaborators: 0 },
     budgetEnabled: false,
     maxWeddings: 1,
     isActive: true,
     sortOrder: 0,
   },
   {
-    key: 'one_time_2',
-    name: '2 Collaborators',
-    description: 'One-time purchase for a single wedding — unlocks Budget and 2 collaborators.',
+    key: 'one_wedding',
+    name: 'One Wedding',
+    description: 'One payment, one wedding, yours until the day is over. No renewal.',
     type: 'one_time' as const,
-    price: 99,
+    price: 2999,
     currency: 'INR',
     billingPeriod: null,
-    limits: { guests: 50, tasks: 50, vendors: 5, collaborators: 2 },
+    limits: { guests: -1, tasks: -1, vendors: -1, collaborators: 10 },
     budgetEnabled: true,
     maxWeddings: null,
     isActive: true,
     sortOrder: 1,
   },
   {
-    key: 'one_time_5',
-    name: '5 Collaborators',
-    description: 'One-time purchase for a single wedding — unlocks Budget and 5 collaborators.',
+    key: 'grand',
+    name: 'Grand',
+    description: 'For a 500-plus guest wedding across five days and two cities.',
     type: 'one_time' as const,
-    price: 199,
+    price: 5499,
     currency: 'INR',
     billingPeriod: null,
-    limits: { guests: 50, tasks: 50, vendors: 5, collaborators: 5 },
+    limits: { guests: -1, tasks: -1, vendors: -1, collaborators: -1 },
     budgetEnabled: true,
     maxWeddings: null,
     isActive: true,
     sortOrder: 2,
   },
   {
-    key: 'one_time_10',
-    name: '10 Collaborators',
-    description: 'One-time purchase for a single wedding — unlocks Budget and 10 collaborators.',
-    type: 'one_time' as const,
-    price: 499,
-    currency: 'INR',
-    billingPeriod: null,
-    limits: { guests: 50, tasks: 50, vendors: 5, collaborators: 10 },
-    budgetEnabled: true,
-    maxWeddings: null,
-    isActive: true,
-    sortOrder: 3,
-  },
-  {
-    key: 'monthly',
-    name: 'Monthly Subscription',
-    description: 'Account-wide paid features, billed every month.',
+    key: 'planner_monthly',
+    name: 'Planner',
+    description: "For people planning weddings that aren't their own.",
     type: 'subscription' as const,
-    price: 1499,
+    price: 899,
     currency: 'INR',
     billingPeriod: 'monthly' as const,
     limits: { guests: -1, tasks: -1, vendors: -1, collaborators: -1 },
     budgetEnabled: true,
     maxWeddings: -1,
     isActive: true,
-    sortOrder: 4,
+    sortOrder: 3,
   },
   {
-    key: 'annual',
-    name: 'Annual Subscription',
-    description: 'Account-wide paid features, billed every year.',
+    key: 'planner_yearly',
+    name: 'Planner, Yearly',
+    description: 'Same thing, paid once a year. Works out to ₹749 a month.',
     type: 'subscription' as const,
-    price: 15000,
+    price: 8990,
     currency: 'INR',
     billingPeriod: 'annual' as const,
     limits: { guests: -1, tasks: -1, vendors: -1, collaborators: -1 },
     budgetEnabled: true,
     maxWeddings: -1,
     isActive: true,
-    sortOrder: 5,
+    sortOrder: 4,
   },
 ];
+
+// Superseded by PLAN_SEEDS above (old per-collaborator-count one-time tiers
+// and generic Monthly/Annual Subscription) — kept here only so an
+// already-seeded environment gets them deactivated rather than showing both
+// the old and new catalog side by side on the Pricing page.
+const LEGACY_PLAN_KEYS = ['one_time_2', 'one_time_5', 'one_time_10', 'monthly', 'annual'];
 
 async function seedPlans(): Promise<void> {
   for (const seed of PLAN_SEEDS) {
     await Plan.findOneAndUpdate({ key: seed.key }, { $setOnInsert: seed }, { upsert: true, new: true });
     logger.info(`Plan seeded/verified: ${seed.key}`);
+  }
+  const { modifiedCount } = await Plan.updateMany(
+    { key: { $in: LEGACY_PLAN_KEYS }, isActive: true },
+    { $set: { isActive: false } }
+  );
+  if (modifiedCount > 0) {
+    logger.info(`Deactivated ${modifiedCount} legacy plan(s): ${LEGACY_PLAN_KEYS.join(', ')}`);
   }
 }
 

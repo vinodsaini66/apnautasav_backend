@@ -19,6 +19,7 @@ import { mapMarketplaceCategoryToVendorCategory } from '../utils/vendorCategoryM
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { PlanResolutionService } from '../services/plan-resolution.service';
+import { computeWeddingStats, getWeddingFunctionsSummary, getConsoleOverview } from '../services/wedding-stats.service';
 import { buildEventAttributes, buildWeddingDayEventAttributes, generateICS } from '../services/calendar.service';
 import logger from '../utils/logger';
 import mongoose from 'mongoose';
@@ -148,7 +149,7 @@ export class WeddingController {
   static async getWeddings(req: Request, res: Response): Promise<void> {
     try {
       const userId = req.user?.userId;
-      const { page = 1, limit = 200, status } = req.query;
+      const { page = 1, limit = 200, status, include } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
       const filter: any = {};
@@ -171,8 +172,9 @@ export class WeddingController {
       const collaborations = await Collaborator.find({
         userId,
         invitationStatus: 'accepted'
-      }).select('weddingId');
+      }).select('weddingId role');
 
+      const roleByWeddingId = new Map(collaborations.map((c) => [String(c.weddingId), c.role]));
       const collaboratorWeddingIds = collaborations.map(c => c.weddingId);
 
       const collaboratorWeddings = await Wedding.find({
@@ -185,7 +187,31 @@ export class WeddingController {
       const allWeddings = [...createdWeddings, ...collaboratorWeddings];
       const total = allWeddings.length;
 
-      ApiResponse.paginated(res, allWeddings, Number(page), Number(limit), total);
+      // `?include=summary` — the dashboard's "one wedding card" view needs
+      // per-wedding role + live guests/tasks/budget/vendors/functions data;
+      // every other caller (the pricing page's/Add-to-Wedding's plain
+      // wedding pickers) just wants {_id, name, ...} and shouldn't pay for
+      // an aggregation pass they throw away.
+      if (include !== 'summary') {
+        ApiResponse.paginated(res, allWeddings, Number(page), Number(limit), total);
+        return;
+      }
+
+      const enriched = await Promise.all(
+        allWeddings.map(async (wedding: any) => {
+          const isOwner = String(wedding.createdBy) === String(userId);
+          const role = isOwner ? 'owner' : roleByWeddingId.get(String(wedding._id)) || 'viewer';
+
+          const [summary, functionsSummary] = await Promise.all([
+            computeWeddingStats(String(wedding._id), wedding.totalBudget || 0),
+            getWeddingFunctionsSummary(String(wedding._id)),
+          ]);
+
+          return { ...wedding, role, summary, functionsSummary };
+        })
+      );
+
+      ApiResponse.paginated(res, enriched, Number(page), Number(limit), total);
     } catch (error: any) {
       logger.error('Get weddings error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to fetch weddings');
@@ -202,7 +228,13 @@ export class WeddingController {
       const invitations = await Collaborator.find({
         userId,
         invitationStatus: 'pending'
-      }).populate('weddingId', 'name location brideName groomName weddingDate').sort({ createdAt: -1 })
+      })
+        .populate('weddingId', 'name location brideName groomName weddingDate')
+        // Dashboard's invitation card reads this to say who actually sent
+        // the invite ("Nidhi invited you as an Admin") — `role` itself was
+        // already a plain field on this document, no populate needed for it.
+        .populate('invitedBy', 'fullName')
+        .sort({ createdAt: -1 })
         .skip(skip).limit(Number(limit))
         .lean();
 
@@ -385,6 +417,16 @@ export class WeddingController {
         return;
       }
 
+      // The wedding's own creator has no Collaborator row (ownership is
+      // tracked via Wedding.createdBy, not a Collaborator doc), so without
+      // this check the existing-collaborator lookup below never matches and
+      // an owner entering their own code gets a spurious 'viewer' Collaborator
+      // row created for themselves.
+      if (String(wedding.createdBy) === String(userId)) {
+        ApiResponse.error(res, 400, 'You already own this wedding');
+        return;
+      }
+
       // Check if already a collaborator
       const existingCollaborator = await Collaborator.findOne({
         weddingId: wedding._id,
@@ -432,127 +474,29 @@ export class WeddingController {
   static async getWeddingStats(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const now = new Date();
-      const weddingObjectId = new mongoose.Types.ObjectId(weddingId);
-
-      const [
-        guestCount,
-        confirmedGuestCount,
-        pendingGuestCount,
-        taskCount,
-        completedTasks,
-        overdueTasks,
-        budgetItems,
-        trackedBudgetItems,
-        totalSpent,
-        paidAggregate,
-        duePaymentsAggregate,
-        vendorCount,
-        bookedVendorCount
-      ] = await Promise.all([
-        Guest.countDocuments({ weddingId }),
-        Guest.countDocuments({ weddingId, rsvpStatus: 'confirmed' }),
-        // 'pending' is the only "hasn't answered yet" value — 'declined' is
-        // itself a real response, not a non-response.
-        Guest.countDocuments({ weddingId, rsvpStatus: 'pending' }),
-        Task.countDocuments({ weddingId }),
-        Task.countDocuments({ weddingId, status: 'completed' }),
-        // Overdue = still actionable (not completed/cancelled) with a due
-        // date already in the past.
-        Task.countDocuments({ weddingId, status: { $nin: ['completed', 'cancelled'] }, dueDate: { $lt: now } }),
-        Budget.countDocuments({ weddingId }),
-        Budget.countDocuments({ weddingId, actualCost: { $ne: null, $exists: true } }),
-        Budget.aggregate([
-          { $match: { weddingId: weddingObjectId } },
-          { $group: { _id: null, total: { $sum: '$actualCost' } } }
-        ]),
-        // Wedding-wide "amount actually paid so far" — a budget item with
-        // per-installment payments uses the sum of its *paid* installments
-        // (`amountPaid`, kept in sync by BudgetInstallmentService); one with
-        // no installments at all only counts as paid once its own `status`
-        // is 'paid', using actualCost (falling back to estimatedCost) as the
-        // amount paid. This mirrors the same items `totalSpent` already sums,
-        // just filtered down to what's actually been settled.
-        Budget.aggregate([
-          { $match: { weddingId: weddingObjectId } },
-          {
-            $project: {
-              paidAmount: {
-                $cond: [
-                  { $gt: [{ $size: { $ifNull: ['$installments', []] } }, 0] },
-                  { $ifNull: ['$amountPaid', 0] },
-                  {
-                    $cond: [
-                      { $eq: ['$status', 'paid'] },
-                      { $ifNull: ['$actualCost', { $ifNull: ['$estimatedCost', 0] }] },
-                      0
-                    ]
-                  }
-                ]
-              }
-            }
-          },
-          { $group: { _id: null, total: { $sum: '$paidAmount' } } }
-        ]),
-        // Installments (per-budget-item payment schedule, usually a vendor
-        // payment) that are still unpaid and already past their due date.
-        Budget.aggregate([
-          { $match: { weddingId: weddingObjectId } },
-          { $unwind: '$installments' },
-          { $match: { 'installments.status': 'pending', 'installments.dueDate': { $lte: now } } },
-          { $count: 'count' }
-        ]),
-        Vendor.countDocuments({ weddingId }),
-        Vendor.countDocuments({ weddingId, bookingStatus: { $in: ['booked', 'confirmed'] } })
-      ]);
 
       const wedding = await Wedding.findById(weddingId).select('totalBudget');
-
-      // Four 0-100 sub-rates that roll up into one overview progress bar.
-      // First-pass formula: simple unweighted average, easy to retune later.
-      const completionRate = taskCount > 0 ? (completedTasks / taskCount) * 100 : 0;
-      const rsvpRate = guestCount > 0 ? (confirmedGuestCount / guestCount) * 100 : 0;
-      const trackedRate = budgetItems > 0 ? (trackedBudgetItems / budgetItems) * 100 : 0;
-      const bookedRate = vendorCount > 0 ? (bookedVendorCount / vendorCount) * 100 : 0;
-
-      const planningProgress = Math.round((completionRate + rsvpRate + trackedRate + bookedRate) / 4);
-
-      const stats = {
-        guests: {
-          total: guestCount,
-          pending: pendingGuestCount,
-          rsvpRate: guestCount > 0 ? Number(rsvpRate.toFixed(2)) : 0
-        },
-        tasks: {
-          total: taskCount,
-          completed: completedTasks,
-          pending: taskCount - completedTasks,
-          overdue: overdueTasks,
-          completionRate: taskCount > 0 ? completionRate.toFixed(2) : 0
-        },
-        budget: {
-          total: wedding?.totalBudget || 0,
-          spent: totalSpent[0]?.total || 0,
-          remaining: (wedding?.totalBudget || 0) - (totalSpent[0]?.total || 0),
-          items: budgetItems,
-          trackedRate: budgetItems > 0 ? Number(trackedRate.toFixed(2)) : 0
-        },
-        payments: {
-          total: wedding?.totalBudget || 0,
-          paid: paidAggregate[0]?.total || 0,
-          dueCount: duePaymentsAggregate[0]?.count || 0
-        },
-        vendors: {
-          total: vendorCount,
-          bookedRate: vendorCount > 0 ? Number(bookedRate.toFixed(2)) : 0
-        },
-        planningProgress
-      };
+      const stats = await computeWeddingStats(weddingId, wedding?.totalBudget || 0);
 
       ApiResponse.success(res, 200, { data: stats });
     } catch (error: any) {
       logger.error('Get wedding stats error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to fetch wedding statistics');
+    }
+  }
+
+  // GET /:weddingId/console — the redesigned workspace's "Console" (Overview)
+  // tab: per-function budget/vendor/guest breakdown plus a real "needs you"
+  // action list. See getConsoleOverview's own doc comment for what was
+  // deliberately left out as unbuildable-without-fabrication.
+  static async getConsoleOverview(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const overview = await getConsoleOverview(weddingId);
+      ApiResponse.success(res, 200, { data: overview });
+    } catch (error: any) {
+      logger.error('Get console overview error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to fetch console overview');
     }
   }
 

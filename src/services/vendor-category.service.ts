@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { VendorCategory } from '../models/vendor-category.model';
+import { VendorCategoryMapping } from '../models/vendor-category-mapping.model';
 import logger from '../utils/logger';
 
 export class VendorCategoryService {
@@ -147,6 +148,57 @@ export class VendorCategoryService {
     }
   }
 
+
+  /**
+   * Top-level categories with a live `vendorCount` each — powers the public
+   * marketplace's "Start with what you're looking for" discovery grid.
+   * Counted the same way `WeddingVendorService.getVendors`'s categoryId
+   * filter matches vendors (via VendorCategoryMapping, matching either the
+   * exact category or, when a mapping row is tagged to a sub-category, its
+   * `parentCategoryId`) — so the count shown on a tile always agrees with
+   * how many results clicking into that category actually returns.
+   */
+  static async getPublicCategoriesWithCounts() {
+    try {
+      const [categories, counts] = await Promise.all([
+        VendorCategory.find({ isActive: true, isDeleted: false, parentId: null })
+          .sort({ sortOrder: 1 })
+          .lean(),
+        VendorCategoryMapping.aggregate([
+          { $match: { isActive: true } },
+          {
+            $lookup: {
+              from: 'weddingvendors',
+              localField: 'vendorId',
+              foreignField: '_id',
+              as: 'vendor',
+            },
+          },
+          { $unwind: '$vendor' },
+          { $match: { 'vendor.isDeleted': false } },
+          {
+            $group: {
+              _id: { $ifNull: ['$parentCategoryId', '$categoryId'] },
+              vendorIds: { $addToSet: '$vendorId' },
+            },
+          },
+          { $project: { count: { $size: '$vendorIds' } } },
+        ]),
+      ]);
+
+      const countByCategoryId = new Map<string, number>(
+        counts.map((row: { _id: mongoose.Types.ObjectId; count: number }) => [String(row._id), row.count])
+      );
+
+      return categories.map((category) => ({
+        ...category,
+        vendorCount: countByCategoryId.get(String(category._id)) ?? 0,
+      }));
+    } catch (error) {
+      logger.error('Error fetching public vendor categories with counts:', error);
+      throw error;
+    }
+  }
 
   /**
    * Get Vendor Category By ID

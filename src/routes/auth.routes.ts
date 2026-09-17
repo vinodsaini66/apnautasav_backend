@@ -7,7 +7,9 @@ import {
   signupSchema,
   loginSchema,
   verifyEmailSchema,
-  resendVerificationSchema
+  resendVerificationSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema
 } from '../validators/auth.validator';
 // import { authRateLimiter } from '../middleware/rateLimit.middleware';
 
@@ -115,6 +117,57 @@ router.post('/verify-email', validate(verifyEmailSchema), AuthController.verifyE
  *         description: Verification email resent (if applicable)
  */
 router.post('/resend-verification', validate(resendVerificationSchema), AuthController.resendVerification);
+
+/**
+ * @swagger
+ * /auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset link by email
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Generic success message, regardless of whether the email is registered
+ */
+router.post('/forgot-password', validate(forgotPasswordSchema), AuthController.forgotPassword);
+
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: Set a new password using the token from the reset-password email link
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - password
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password reset successfully, logs the user in
+ *       400:
+ *         description: Invalid or expired reset link
+ */
+router.post('/reset-password', validate(resetPasswordSchema), AuthController.resetPassword);
 
 /**
  * @swagger

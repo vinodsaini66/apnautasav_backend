@@ -32,6 +32,7 @@ router.get('/:weddingId/plan', checkWeddingAccess, WeddingController.getWeddingP
 router.put('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(updateWeddingSchema), WeddingController.updateWedding);
 router.delete('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), WeddingController.deleteWedding);
 router.get('/:weddingId/stats', checkWeddingAccess, WeddingController.getWeddingStats);
+router.get('/:weddingId/console', checkWeddingAccess, WeddingController.getConsoleOverview);
 router.put('/:weddingId/public-settings', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), validate(updatePublicSettingsSchema), WeddingController.updatePublicSettings);
 router.get('/:weddingId/search', checkWeddingAccess, WeddingController.globalSearch);
 router.get('/:weddingId/recommended-vendors', checkWeddingAccess, WeddingController.getRecommendedVendors);

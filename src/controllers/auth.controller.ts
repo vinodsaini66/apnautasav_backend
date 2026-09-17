@@ -50,8 +50,9 @@ export class AuthController {
       const { token } = req.body;
 
       const result = await AuthService.verifyEmail(token);
+      setAuthCookie(res, result.token);
 
-      ApiResponse.success(res, 200, { message: result.message });
+      ApiResponse.success(res, 200, { message: result.message, data: result });
     } catch (error: any) {
       logger.error('Verify email error:', error);
       ApiResponse.error(res, 400, error.message || 'Failed to verify email');
@@ -68,6 +69,33 @@ export class AuthController {
     } catch (error: any) {
       logger.error('Resend verification error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to resend verification email');
+    }
+  }
+
+  static async forgotPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const { email } = req.body;
+
+      const result = await AuthService.forgotPassword(email);
+
+      ApiResponse.success(res, 200, { message: result.message });
+    } catch (error: any) {
+      logger.error('Forgot password error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to process request');
+    }
+  }
+
+  static async resetPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const { token, password } = req.body;
+
+      const result = await AuthService.resetPassword(token, password);
+      setAuthCookie(res, result.token);
+
+      ApiResponse.success(res, 200, { message: result.message, data: result });
+    } catch (error: any) {
+      logger.error('Reset password error:', error);
+      ApiResponse.error(res, 400, error.message || 'Failed to reset password');
     }
   }
 

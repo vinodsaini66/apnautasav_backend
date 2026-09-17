@@ -139,6 +139,7 @@ export class WeddingVendorService {
       minRating?: number;
       minReviews?: number;
       hasAwards?: boolean;
+      sortBy?: 'recommended' | 'rating' | 'reviews' | 'price_low' | 'price_high' | 'newest';
     }
   ) {
     try {
@@ -317,17 +318,26 @@ export class WeddingVendorService {
       }
 
 
+      // "Recommended" (the default, unchanged) keeps featured/premium
+      // listings pinned to the top ahead of rating — every other sort is an
+      // explicit visitor choice, so it sorts purely on that one signal
+      // instead of still deferring to featured/premium placement.
+      const SORT_STAGES: Record<string, Record<string, 1 | -1>> = {
+        recommended: { isFeatured: -1, isPremium: -1, rating: -1, createdAt: -1 },
+        rating: { rating: -1, reviewCount: -1 },
+        reviews: { reviewCount: -1, rating: -1 },
+        price_low: { 'pricing.startingPrice': 1 },
+        price_high: { 'pricing.startingPrice': -1 },
+        newest: { createdAt: -1 },
+      };
+      const sortStage = SORT_STAGES[filters?.sortBy ?? 'recommended'] ?? SORT_STAGES.recommended;
+
       const [
         vendors,
         total,
       ] = await Promise.all([
         WeddingVendor.find(query)
-          .sort({
-            isFeatured: -1,
-            isPremium: -1,
-            rating: -1,
-            createdAt: -1,
-          })
+          .sort(sortStage)
           .skip(skip)
           .limit(limit)
           .lean(),
