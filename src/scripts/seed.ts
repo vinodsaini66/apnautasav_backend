@@ -7,6 +7,7 @@ import { Plan } from '../models/plan.model';
 import { VendorCategory } from '../models/vendor-category.model';
 import { Banner } from '../models/banner.model';
 import { Blog, BlogTag } from '../models/blog.model';
+import { Faq } from '../models/faq.model';
 import { User } from '../models/user.model';
 import { TaskTemplate } from '../models/task-template.model';
 import logger from '../utils/logger';
@@ -593,6 +594,50 @@ async function seedTaskTemplates(): Promise<void> {
   }
 }
 
+// The landing page's FAQ accordion — was a hardcoded array in
+// apnautasav_frontend/app/page.tsx, now served from here. Upserted by
+// `question` (its natural identifying field, same idea as Blog's `slug`),
+// so re-running this script never clobbers a live admin edit.
+const FAQ_SEEDS = [
+  {
+    question: 'Does my family need to create accounts?',
+    answer:
+      "Anyone who will edit does — they get an email invite and a role. Anyone who only wants to watch can join with the 6-character wedding code as a viewer. Guests who just need the schedule need nothing at all.",
+    order: 0,
+  },
+  {
+    question: 'Can I import the guest list I already have?',
+    answer:
+      "Yes — a CSV or Excel export from anywhere. Column names don't have to match; you map them on the import screen, and there's a sample file to copy the shape from.",
+    order: 1,
+  },
+  {
+    question: 'What happens to my data after the wedding?',
+    answer:
+      "It stays. You can read everything, export the guest list and budget as CSV or PDF, and delete the whole wedding whenever you want. We don't sell it and we don't pass it to vendors.",
+    order: 2,
+  },
+  {
+    question: 'Do you take a cut from vendors?',
+    answer:
+      "No. Vendors pay to be listed and verified; they pay nothing on a booking, and their ranking isn't for sale. You can also add a vendor who isn't on ApnaUtsav at all.",
+    order: 3,
+  },
+  {
+    question: 'Is it in Hindi?',
+    answer:
+      "English and Hindi, switchable per person — your mother can read it in Hindi while you read the same wedding in English. The public guest page follows whatever you set for it.",
+    order: 4,
+  },
+];
+
+async function seedFaqs(): Promise<void> {
+  for (const seed of FAQ_SEEDS) {
+    await Faq.findOneAndUpdate({ question: seed.question }, { $setOnInsert: { ...seed, isActive: true } }, { upsert: true, new: true });
+    logger.info(`FAQ seeded/verified: ${seed.question}`);
+  }
+}
+
 async function main(): Promise<void> {
   await connectDatabase();
   await seedPlans();
@@ -600,6 +645,7 @@ async function main(): Promise<void> {
   await seedBanners();
   await seedBlogs();
   await seedTaskTemplates();
+  await seedFaqs();
   logger.info('Seeding complete');
   await mongoose.disconnect();
   process.exit(0);

@@ -15,6 +15,7 @@ export function setAuthCookie(res: Response, token: string) {
         sameSite: "strict",
         maxAge: 7 * 24 * 60 * 60 * 1000
     });
+    
 }
 
 export function clearAuthCookie(res: Response) {
