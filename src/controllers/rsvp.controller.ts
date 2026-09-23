@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Guest } from '../models/guest.model';
 import { Wedding } from '../models/wedding.model';
 import { WeddingEvent } from '../models/event.model';
+import { GuestNote } from '../models/guestNote.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
@@ -25,7 +26,7 @@ export class RsvpController {
       const { token } = req.params;
 
       const guest = await Guest.findOne({ rsvpToken: token })
-        .select('name rsvpStatus plusOne dietaryRestrictions weddingId')
+        .select('name rsvpStatus plusOne dietaryRestrictions weddingId eventIds')
         .lean();
 
       if (!guest) {
@@ -40,7 +41,7 @@ export class RsvpController {
       }
 
       const events = await WeddingEvent.find({ weddingId: wedding._id })
-        .select('title eventType startDateTime endDateTime location dressCode status')
+        .select('title eventType startDateTime endDateTime location dressCode status isFamilyOnly')
         .sort({ startDateTime: 1 })
         .lean();
 
@@ -50,7 +51,11 @@ export class RsvpController {
             name: guest.name,
             rsvpStatus: guest.rsvpStatus,
             plusOne: guest.plusOne,
-            dietaryRestrictions: guest.dietaryRestrictions
+            dietaryRestrictions: guest.dietaryRestrictions,
+            // Which functions this guest is invited to — lets the frontend
+            // compute per-event "you're coming" / "family only" / "not
+            // shown" badges without a second request.
+            eventIds: (guest.eventIds || []).map((id) => String(id))
           },
           wedding: {
             name: wedding.name,
@@ -60,7 +65,11 @@ export class RsvpController {
             location: wedding.location,
             description: wedding.description,
             imageUrl: wedding.imageUrl,
-            status: wedding.status
+            status: wedding.status,
+            venueAddress: wedding.venueAddress,
+            accommodationInfo: wedding.accommodationInfo,
+            pickupInfo: wedding.pickupInfo,
+            giftPolicy: wedding.giftPolicy
           },
           events
         }
@@ -149,6 +158,63 @@ export class RsvpController {
     } catch (error: any) {
       logger.error('Submit RSVP error:', error);
       ApiResponse.error(res, 500, 'Failed to submit RSVP');
+    }
+  }
+
+  /**
+   * POST /rsvp/:token/note — public, unauthenticated. A guest leaving a
+   * note for the couple, visible to the wedding's team in-app via
+   * GET /:weddingId/guest-notes. Same guest lookup + generic 404 as
+   * getRsvp/submitRsvp above — never leaks more than those do. guestName is
+   * denormalized onto the note at write time so it still displays even if
+   * the guest is later renamed/deleted.
+   */
+  static async submitNote(req: Request, res: Response): Promise<void> {
+    try {
+      const { token } = req.params;
+      const { message } = req.body as { message: string };
+
+      const guest = await Guest.findOne({ rsvpToken: token });
+      if (!guest) {
+        ApiResponse.error(res, 404, 'Invitation not found');
+        return;
+      }
+
+      await GuestNote.create({
+        weddingId: guest.weddingId,
+        guestId: guest._id,
+        guestName: guest.name,
+        message
+      });
+
+      // Notify the wedding team — mirrors submitRsvp's best-effort
+      // notification above; failures never block the 200 response.
+      try {
+        const weddingId = String(guest.weddingId);
+        const recipientIds = await NotificationService.getWeddingRecipientIds(weddingId);
+        await Promise.all(
+          recipientIds.map((recipientId) =>
+            NotificationService.createNotification({
+              recipientId,
+              weddingId,
+              type: 'activity_alert',
+              title: 'New Guest Note',
+              message: `${guest.name} left a note for you`,
+              relatedEntityType: 'guest',
+              relatedEntityId: String(guest._id)
+            })
+          )
+        );
+      } catch (notifyError) {
+        logger.warn('Failed to send guest note notification:', notifyError);
+      }
+
+      ApiResponse.success(res, 200, {
+        message: 'Thank you for your note!'
+      });
+    } catch (error: any) {
+      logger.error('Submit guest note error:', error);
+      ApiResponse.error(res, 500, 'Failed to submit note');
     }
   }
 }

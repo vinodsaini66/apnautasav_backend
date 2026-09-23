@@ -22,6 +22,15 @@ export interface IWedding extends Document {
   // the unique index.
   isPublic: boolean;
   publicSlug?: string;
+  // Guest-facing wedding-website info cards (redesign). All four are
+  // independently optional/nullable — a wedding with none of them set
+  // simply means the frontend hides those cards. venueAddress is the full
+  // postal address, deliberately separate from the existing short
+  // `location` display string above.
+  venueAddress?: string;
+  accommodationInfo?: string;
+  pickupInfo?: string;
+  giftPolicy?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -101,6 +110,26 @@ const weddingSchema = new Schema<IWedding>({
     unique: true,
     sparse: true,
     trim: true
+  },
+  venueAddress: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Venue address cannot exceed 500 characters']
+  },
+  accommodationInfo: {
+    type: String,
+    trim: true,
+    maxlength: [2000, 'Accommodation info cannot exceed 2000 characters']
+  },
+  pickupInfo: {
+    type: String,
+    trim: true,
+    maxlength: [2000, 'Pickup info cannot exceed 2000 characters']
+  },
+  giftPolicy: {
+    type: String,
+    trim: true,
+    maxlength: [2000, 'Gift policy cannot exceed 2000 characters']
   }
 }, {
   timestamps: true

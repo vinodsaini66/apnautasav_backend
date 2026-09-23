@@ -57,6 +57,9 @@ export const updateEventSchema = z.object({
     dressCode: z.string().max(100).optional(),
     status: z.enum(['planning', 'confirmed', 'completed', 'cancelled']).optional(),
     isPublic: z.boolean().optional(),
+    // Marks a function (e.g. Haldi) as family-only on the public wedding
+    // website — distinct from `status`.
+    isFamilyOnly: z.boolean().optional(),
     estimatedBudget: z.number().min(0).optional(),
     imageUrl: z.string().url().optional()
   })

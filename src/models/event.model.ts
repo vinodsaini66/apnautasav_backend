@@ -18,6 +18,10 @@ export interface IEvent extends Document {
     dressCode?: string;
     status: 'planning' | 'confirmed' | 'completed' | 'cancelled';
     isPublic: boolean;
+    // Marks a function (e.g. Haldi) as family-only on the public wedding
+    // website — distinct from `status`, which tracks planning progress, not
+    // guest visibility scope.
+    isFamilyOnly: boolean;
     // Planning target for this function, compared against the live sum of
     // Budget items tagged with this event's id (never stored — always
     // computed, so the two numbers can't drift apart).
@@ -98,6 +102,10 @@ const eventSchema = new Schema<IEvent>({
     isPublic: {
         type: Boolean,
         default: true
+    },
+    isFamilyOnly: {
+        type: Boolean,
+        default: false
     },
     estimatedBudget: {
         type: Number,

@@ -48,7 +48,9 @@ export const joinWeddingSchema = z.object({
 
 // Public wedding website toggle (#29). publicSlug is optional — when
 // enabling for the first time without one, the controller auto-generates
-// it from bride+groom names.
+// it from bride+groom names. The four guest-facing info fields below
+// (redesign) are independently optional — only whichever are present in
+// the request body get updated, the rest are left untouched.
 export const updatePublicSettingsSchema = z.object({
   body: z.object({
     isPublic: z.boolean(),
@@ -57,6 +59,10 @@ export const updatePublicSettingsSchema = z.object({
       .min(3, 'Custom link must be at least 3 characters')
       .max(120)
       .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Custom link may only contain lowercase letters, numbers, and hyphens')
-      .optional()
+      .optional(),
+    venueAddress: z.string().max(500, 'Venue address cannot exceed 500 characters').optional(),
+    accommodationInfo: z.string().max(2000, 'Accommodation info cannot exceed 2000 characters').optional(),
+    pickupInfo: z.string().max(2000, 'Pickup info cannot exceed 2000 characters').optional(),
+    giftPolicy: z.string().max(2000, 'Gift policy cannot exceed 2000 characters').optional()
   })
 });

@@ -504,12 +504,21 @@ export class WeddingController {
    * PUT /:weddingId/public-settings — toggles the wedding website on/off
    * and optionally sets/changes its publicSlug. Auto-generates a slug from
    * bride+groom names on first enable if none is supplied, retrying on a
-   * duplicate-key collision.
+   * duplicate-key collision. Also accepts the 4 guest-facing info fields
+   * (redesign) — each independently optional, only updating whichever are
+   * present in the body without touching the others.
    */
   static async updatePublicSettings(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const { isPublic, publicSlug } = req.body as { isPublic: boolean; publicSlug?: string };
+      const { isPublic, publicSlug, venueAddress, accommodationInfo, pickupInfo, giftPolicy } = req.body as {
+        isPublic: boolean;
+        publicSlug?: string;
+        venueAddress?: string;
+        accommodationInfo?: string;
+        pickupInfo?: string;
+        giftPolicy?: string;
+      };
 
       const wedding = await Wedding.findById(weddingId);
       if (!wedding) {
@@ -530,6 +539,11 @@ export class WeddingController {
 
       wedding.isPublic = !!isPublic;
 
+      if (venueAddress !== undefined) wedding.venueAddress = venueAddress;
+      if (accommodationInfo !== undefined) wedding.accommodationInfo = accommodationInfo;
+      if (pickupInfo !== undefined) wedding.pickupInfo = pickupInfo;
+      if (giftPolicy !== undefined) wedding.giftPolicy = giftPolicy;
+
       if (isPublic && !wedding.publicSlug) {
         await ensurePublicSlug(wedding);
       } else {
@@ -538,7 +552,14 @@ export class WeddingController {
 
       ApiResponse.success(res, 200, {
         message: 'Public settings updated successfully',
-        data: { isPublic: wedding.isPublic, publicSlug: wedding.publicSlug }
+        data: {
+          isPublic: wedding.isPublic,
+          publicSlug: wedding.publicSlug,
+          venueAddress: wedding.venueAddress,
+          accommodationInfo: wedding.accommodationInfo,
+          pickupInfo: wedding.pickupInfo,
+          giftPolicy: wedding.giftPolicy
+        }
       });
     } catch (error: any) {
       logger.error('Update public settings error:', error);
@@ -570,7 +591,11 @@ export class WeddingController {
           location: wedding.location,
           description: wedding.description,
           imageUrl: wedding.imageUrl,
-          status: wedding.status
+          status: wedding.status,
+          venueAddress: wedding.venueAddress,
+          accommodationInfo: wedding.accommodationInfo,
+          pickupInfo: wedding.pickupInfo,
+          giftPolicy: wedding.giftPolicy
         }
       });
     } catch (error: any) {
@@ -594,7 +619,7 @@ export class WeddingController {
       }
 
       const events = await WeddingEvent.find({ weddingId: wedding._id })
-        .select('title eventType startDateTime endDateTime location dressCode status')
+        .select('title eventType startDateTime endDateTime location dressCode status isFamilyOnly')
         .sort({ startDateTime: 1 })
         .lean();
 

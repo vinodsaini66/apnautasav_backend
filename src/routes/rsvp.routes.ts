@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { RsvpController } from '../controllers/rsvp.controller';
 import { rsvpRateLimiter } from '../middleware/rateLimit.middleware';
 import { validate } from '../middleware/validation.middleware';
-import { rsvpSubmitSchema } from '../validators/guest.validator';
+import { rsvpSubmitSchema, submitGuestNoteSchema } from '../validators/guest.validator';
 
 /**
  * GET /rsvp/:token, POST /rsvp/:token
@@ -21,5 +21,9 @@ const router: Router = Router();
 
 router.get('/:token', rsvpRateLimiter, RsvpController.getRsvp);
 router.post('/:token', rsvpRateLimiter, validate(rsvpSubmitSchema), RsvpController.submitRsvp);
+// POST /rsvp/:token/note — a guest leaving a note for the couple (wedding
+// website redesign). Same public/unauthenticated + rsvpRateLimiter pattern
+// as the two routes above.
+router.post('/:token/note', rsvpRateLimiter, validate(submitGuestNoteSchema), RsvpController.submitNote);
 
 export default router;

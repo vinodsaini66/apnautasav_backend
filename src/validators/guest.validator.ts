@@ -73,6 +73,15 @@ export const rsvpSubmitSchema = z.object({
   })
 });
 
+// POST /rsvp/:token/note (public, unauthenticated) — a guest leaving a
+// note for the couple. Deliberately narrow, same spirit as
+// rsvpSubmitSchema above.
+export const submitGuestNoteSchema = z.object({
+  body: z.object({
+    message: z.string().trim().min(2, 'Message must be at least 2 characters').max(1000, 'Message cannot exceed 1000 characters'),
+  })
+});
+
 // POST /:weddingId/guests/bulk-import — CSV/bulk guest import. Deliberately
 // loose (every field optional, no enum/email format enforcement here): a
 // real CSV a family exports from Excel/Google Contacts is messy (a
