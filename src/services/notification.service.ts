@@ -9,6 +9,29 @@ import { EmailService } from './email.service';
 import mongoose from 'mongoose';
 import logger from '../utils/logger';
 
+// Maps a comment's entityType (see comment.controller.ts's COMMENT_ENTITY_TYPES)
+// to the frontend tab it lives on — app/wedding/[id]/<tab>, singular "wedding"
+// (a real pre-existing bug elsewhere in this file used plural "weddings",
+// which never matched any real route). "task" deep-links to the specific
+// task via ?taskId=, since app/wedding/[id]/tasks/page.tsx already reads
+// that param to auto-open the task's detail panel; the others don't have a
+// per-item deep-link target yet, so they land on the tab itself.
+const ENTITY_TAB: Record<string, string> = {
+  task: 'tasks',
+  guest: 'guests',
+  budget: 'budget',
+  vendor: 'vendors',
+  event: 'events',
+  note: 'collaboration'
+};
+
+function buildEntityActionUrl(weddingId: string, entityType: string, entityId: string): string | undefined {
+  const tab = ENTITY_TAB[entityType];
+  if (!tab) return undefined;
+  if (entityType === 'task') return `/wedding/${weddingId}/${tab}?taskId=${entityId}`;
+  return `/wedding/${weddingId}/${tab}`;
+}
+
 export class NotificationService {
   /**
    * Everyone who should hear about an in-wedding change: the wedding owner
@@ -136,7 +159,7 @@ export class NotificationService {
         message: `You have been assigned to task: ${taskTitle}`,
         relatedEntityType: 'task',
         relatedEntityId: taskId,
-        actionUrl: `/weddings/${weddingId}/tasks/${taskId}`
+        actionUrl: `/wedding/${weddingId}/tasks?taskId=${taskId}`
       })
     );
 
@@ -177,7 +200,7 @@ export class NotificationService {
         message: `Task "${taskTitle}" is due on ${dueDateLabel}`,
         relatedEntityType: 'task',
         relatedEntityId: taskId,
-        actionUrl: `/weddings/${weddingId}/tasks/${taskId}`
+        actionUrl: `/wedding/${weddingId}/tasks?taskId=${taskId}`
       })
     );
 
@@ -229,7 +252,9 @@ export class NotificationService {
     commentContent: string
   ) {
     const socketServer = getSocketServer();
-    
+
+    const actionUrl = buildEntityActionUrl(weddingId, entityType, entityId);
+
     const notifications = recipientIds
       .filter(id => id !== commentAuthorId)
       .map(userId =>
@@ -241,7 +266,8 @@ export class NotificationService {
           title: 'New Comment',
           message: `New comment on ${entityType}: ${commentContent.substring(0, 50)}...`,
           relatedEntityType: entityType,
-          relatedEntityId: entityId
+          relatedEntityId: entityId,
+          ...(actionUrl ? { actionUrl } : {})
         })
       );
 
@@ -269,7 +295,7 @@ export class NotificationService {
       type: 'member_invited',
       title: 'Wedding Invitation',
       message: 'You have been invited to collaborate on a wedding',
-      actionUrl: `/weddings/${weddingId}`
+      actionUrl: `/wedding/${weddingId}`
     });
   }
 
@@ -292,7 +318,8 @@ export class NotificationService {
           type: 'budget_updated',
           title: 'Budget Updated',
           message: `Budget ${action} for ${budgetCategory}`,
-          relatedEntityType: 'budget'
+          relatedEntityType: 'budget',
+          actionUrl: `/wedding/${weddingId}/budget`
         })
       );
 
@@ -322,7 +349,8 @@ export class NotificationService {
         type: 'activity_alert',
         title: 'Guest RSVP Updated',
         message: `${guestName} ${rsvpStatus === 'confirmed' ? 'confirmed' : rsvpStatus === 'declined' ? 'declined' : 'is now pending on'} the invitation`,
-        relatedEntityType: 'guest'
+        relatedEntityType: 'guest',
+        actionUrl: `/wedding/${weddingId}/guests`
       })
     );
 

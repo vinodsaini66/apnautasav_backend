@@ -20,7 +20,24 @@ const FREE_PLAN_FALLBACK = {
   maxWeddings: 1,
 };
 
-export type PlanSource = 'subscription' | 'one_time' | 'free';
+// ============================================================================
+// TEMPORARY (2026-09-23): every logged-in user gets Grand-plan access,
+// regardless of what they actually purchased — a deliberate growth-phase
+// override, not a bug. The real precedence logic (subscription > one-time
+// purchase > free) is preserved below, commented out rather than deleted,
+// in every method this touches. TO REVERT: delete the "TEMP GRAND OVERRIDE"
+// block in each of getEffectivePlanForWedding / getWeddingCreationCap /
+// getAccountPlanSummary below and uncomment the original code beneath it.
+// ============================================================================
+const GRAND_PLAN_FALLBACK = {
+  planKey: 'grand',
+  limits: { guests: UNLIMITED, tasks: UNLIMITED, vendors: UNLIMITED, collaborators: UNLIMITED } as IPlanLimits,
+  budgetEnabled: true,
+  aiAssistantEnabled: true,
+  maxWeddings: null as number | null,
+};
+
+export type PlanSource = 'subscription' | 'one_time' | 'free' | 'temp_grand_override';
 
 export interface EffectivePlan {
   source: PlanSource;
@@ -39,6 +56,18 @@ export interface UsageCounts {
 }
 
 export class PlanResolutionService {
+  // getFreePlanDefaults/getActiveSubscription below are only called from
+  // inside the commented-out "ORIGINAL LOGIC" blocks while the TEMP GRAND
+  // OVERRIDE is active (see GRAND_PLAN_FALLBACK above) — this no-op
+  // reference (property access, never invoked) just keeps the compiler's
+  // noUnusedLocals check happy without deleting either method. Delete this
+  // whole static block when reverting; the real call sites come back with
+  // the original logic.
+  static {
+    void this.getFreePlanDefaults;
+    void this.getActiveSubscription;
+  }
+
   private static async getFreePlanDefaults(): Promise<{
     planKey: string;
     limits: IPlanLimits;
@@ -63,6 +92,29 @@ export class PlanResolutionService {
     };
   }
 
+  // TEMP GRAND OVERRIDE helper — see the block comment above
+  // GRAND_PLAN_FALLBACK for why this exists and how to revert it.
+  private static async getGrandPlanDefaults(): Promise<{
+    planKey: string;
+    limits: IPlanLimits;
+    budgetEnabled: boolean;
+    aiAssistantEnabled: boolean;
+    maxWeddings: number | null;
+  }> {
+    const grandPlan = await Plan.findOne({ key: 'grand', isActive: true }).lean();
+    if (!grandPlan) {
+      logger.warn('Grand plan document not found/inactive — falling back to hardcoded defaults for the temporary all-users-get-Grand override');
+      return GRAND_PLAN_FALLBACK;
+    }
+    return {
+      planKey: grandPlan.key,
+      limits: grandPlan.limits,
+      budgetEnabled: grandPlan.budgetEnabled,
+      aiAssistantEnabled: grandPlan.aiAssistantEnabled ?? true,
+      maxWeddings: grandPlan.maxWeddings,
+    };
+  }
+
   private static async getActiveSubscription(ownerUserId: string) {
     const now = new Date();
     return Purchase.findOne({
@@ -82,7 +134,18 @@ export class PlanResolutionService {
    * (account-level, wins for every wedding they have) > an active one-time
    * purchase scoped to this exact wedding > Free plan defaults.
    */
-  static async getEffectivePlanForWedding(ownerUserId: string, weddingId: string): Promise<EffectivePlan> {
+  static async getEffectivePlanForWedding(_ownerUserId: string, _weddingId: string): Promise<EffectivePlan> {
+    // TEMP GRAND OVERRIDE — see block comment above GRAND_PLAN_FALLBACK.
+    const grand = await this.getGrandPlanDefaults();
+    return {
+      source: 'temp_grand_override',
+      planKey: grand.planKey,
+      limits: grand.limits,
+      budgetEnabled: grand.budgetEnabled,
+      aiAssistantEnabled: grand.aiAssistantEnabled,
+    };
+
+    /* ORIGINAL LOGIC — restore this (and delete the override above) to revert:
     const subscription = await this.getActiveSubscription(ownerUserId);
     if (subscription) {
       return {
@@ -123,19 +186,26 @@ export class PlanResolutionService {
       budgetEnabled: free.budgetEnabled,
       aiAssistantEnabled: free.aiAssistantEnabled,
     };
+    */
   }
 
   /**
    * How many weddings this user is allowed to CREATE in total. An active
    * subscription replaces the Free plan's cap entirely.
    */
-  static async getWeddingCreationCap(userId: string): Promise<{ cap: number; source: 'subscription' | 'free' }> {
+  static async getWeddingCreationCap(_userId: string): Promise<{ cap: number; source: 'subscription' | 'free' | 'temp_grand_override' }> {
+    // TEMP GRAND OVERRIDE — see block comment above GRAND_PLAN_FALLBACK.
+    const grand = await this.getGrandPlanDefaults();
+    return { cap: grand.maxWeddings ?? UNLIMITED, source: 'temp_grand_override' };
+
+    /* ORIGINAL LOGIC — restore this (and delete the override above) to revert:
     const subscription = await this.getActiveSubscription(userId);
     if (subscription) {
       return { cap: subscription.maxWeddingsSnapshot ?? UNLIMITED, source: 'subscription' };
     }
     const free = await this.getFreePlanDefaults();
     return { cap: free.maxWeddings ?? 1, source: 'free' };
+    */
   }
 
   static async getCurrentUsage(weddingId: string): Promise<UsageCounts> {
@@ -165,6 +235,21 @@ export class PlanResolutionService {
     cap: number;
     weddingsUsed: number;
   }> {
+    // TEMP GRAND OVERRIDE — see block comment above GRAND_PLAN_FALLBACK.
+    // weddingsUsed is still the real count (harmless/informational); only
+    // the plan identity and cap are overridden.
+    const [grand, weddingsUsed] = await Promise.all([
+      this.getGrandPlanDefaults(),
+      Wedding.countDocuments({ createdBy: userId }),
+    ]);
+    return {
+      hasActiveSubscription: true,
+      planKey: grand.planKey,
+      cap: grand.maxWeddings ?? UNLIMITED,
+      weddingsUsed,
+    };
+
+    /* ORIGINAL LOGIC — restore this (and delete the override above) to revert:
     const [subscription, weddingsUsed] = await Promise.all([
       this.getActiveSubscription(userId),
       Wedding.countDocuments({ createdBy: userId }),
@@ -186,5 +271,6 @@ export class PlanResolutionService {
       cap: free.maxWeddings ?? 1,
       weddingsUsed,
     };
+    */
   }
 }

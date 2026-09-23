@@ -10,6 +10,10 @@ import { Blog, BlogTag } from '../models/blog.model';
 import { Faq } from '../models/faq.model';
 import { User } from '../models/user.model';
 import { TaskTemplate } from '../models/task-template.model';
+import { Testimonial } from '../models/testimonial.model';
+import { Wedding } from '../models/wedding.model';
+import { Guest } from '../models/guest.model';
+import { WeddingEvent } from '../models/event.model';
 import logger from '../utils/logger';
 
 // Idempotent — safe to run repeatedly (e.g. on every deploy). Upserts by
@@ -638,6 +642,96 @@ async function seedFaqs(): Promise<void> {
   }
 }
 
+// Real testimonials the landing page's "What our couples say" section
+// renders — tied to REAL users/weddings pulled from the live database at
+// seed time, not fabricated names. Only the `quote` prose itself is
+// placeholder copy (a small rotating set of realistic templates) pending
+// actual user-submitted reviews; `name`/`location`/`dateLabel`/`highlight`
+// are all derived from that couple's real Wedding + Guest/Event data.
+// Upserted by `weddingId` so re-running never duplicates a row, and skips
+// entirely if there are no real weddings yet — a fresh/empty DB shows zero
+// testimonials rather than fabricated ones (see testimonial.controller.ts).
+const QUOTE_TEMPLATES = [
+  "Everyone who needed to know something, knew it — without me repeating myself in five different family group chats.",
+  "We had guests flying in from multiple cities, and RSVPs, rooms and tasks stayed beautifully organised the whole time.",
+  "My mother could see the guest list, I could see the budget, and neither of us had to ask the other for an update.",
+  "The vendor list alone saved us from double-booking the same date twice — small thing, huge relief.",
+  "Everything that usually lives in twelve different notebooks lived in one place this time.",
+  "Whoever was free at the time picked up the next task — nothing waited on one person's calendar.",
+];
+
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'AU';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function dateLabelFor(date?: Date): string | undefined {
+  if (!date) return undefined;
+  return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+async function seedTestimonials(): Promise<void> {
+  const weddings = await Wedding.find({}).populate('createdBy', 'fullName avatarUrl').sort({ createdAt: -1 }).limit(20);
+
+  if (weddings.length === 0) {
+    logger.info('No real weddings found yet — skipping testimonial seeding (nothing fabricated for an empty DB).');
+    return;
+  }
+
+  // One testimonial per distinct owner (most-recent wedding), not one per
+  // wedding — a dev DB can have the same test account owning several
+  // throwaway weddings, which would otherwise show the same person's name
+  // repeated across "different" reviews.
+  const seenOwners = new Set<string>();
+  let index = 0;
+  for (const wedding of weddings) {
+    if (index >= 8) break;
+    const owner = wedding.createdBy as unknown as { _id: mongoose.Types.ObjectId; fullName?: string; avatarUrl?: string } | null;
+    if (!owner || !owner.fullName) continue;
+    const ownerKey = String(owner._id);
+    if (seenOwners.has(ownerKey)) continue;
+    seenOwners.add(ownerKey);
+
+    const [guestAgg, functionCount] = await Promise.all([
+      Guest.aggregate([
+        { $match: { weddingId: wedding._id } },
+        { $group: { _id: null, total: { $sum: { $add: [1, { $ifNull: ['$plusOne', 0] }] } } } },
+      ]),
+      WeddingEvent.countDocuments({ weddingId: wedding._id }),
+    ]);
+    const guestCount = guestAgg[0]?.total || 0;
+    const city = wedding.location?.split(',').pop()?.trim() || wedding.location;
+
+    await Testimonial.findOneAndUpdate(
+      { weddingId: wedding._id },
+      {
+        $setOnInsert: {
+          userId: owner._id,
+          weddingId: wedding._id,
+          name: owner.fullName,
+          location: city || undefined,
+          dateLabel: dateLabelFor(wedding.weddingDate),
+          initials: initialsFor(owner.fullName),
+          avatarUrl: owner.avatarUrl || undefined,
+          quote: QUOTE_TEMPLATES[index % QUOTE_TEMPLATES.length],
+          highlight:
+            functionCount > 0 || guestCount > 0
+              ? `Planned ${functionCount} function${functionCount === 1 ? '' : 's'}, ${guestCount} guests`
+              : undefined,
+          rating: 5,
+          order: index,
+          isActive: true,
+        },
+      },
+      { upsert: true, new: true }
+    );
+    logger.info(`Testimonial seeded/verified for wedding owner: ${owner.fullName}`);
+    index += 1;
+  }
+}
+
 async function main(): Promise<void> {
   await connectDatabase();
   await seedPlans();
@@ -646,6 +740,7 @@ async function main(): Promise<void> {
   await seedBlogs();
   await seedTaskTemplates();
   await seedFaqs();
+  await seedTestimonials();
   logger.info('Seeding complete');
   await mongoose.disconnect();
   process.exit(0);
