@@ -443,6 +443,25 @@ export const createBookingSchema = z.object({
     notes: shortText(5000).optional(),
   }),
 });
+export const listBookingsSchema = z.object({
+  query: z
+    .object({
+      page: z.string().regex(/^\d+$/).optional(),
+      limit: z.string().regex(/^\d+$/).optional(),
+      search: z.string().trim().max(100).optional(),
+      status: z
+        .string()
+        .refine((v) => v.split(',').every((s) => (BOOKING_STATUSES as readonly string[]).includes(s)), 'Unknown booking status')
+        .optional(),
+      from: dateStr.optional(),
+      to: dateStr.optional(),
+      clientId: objectId.optional(),
+      when: z.enum(['upcoming', 'past']).optional(),
+      balance: z.enum(['due', 'cleared']).optional(),
+      sort: z.enum(['eventDate', 'eventDateDesc', 'newest', 'oldest']).optional(),
+    })
+    .passthrough(),
+});
 export const updateBookingSchema = z.object({
   params: idParam('bookingId'),
   body: z.object({

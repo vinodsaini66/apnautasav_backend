@@ -12,12 +12,27 @@ import { financials, q, userIdOf, vendorIdOf } from './_context';
 export class VendorOsBookingController {
   static list = handle(async (req: Request, res: Response) => {
     const { page, limit, skip } = parsePagination(req.query);
-    const { items, total } = await VendorBookingService.list(
+    const { items, total, statusCounts } = await VendorBookingService.list(
       vendorIdOf(req),
-      { status: q(req, 'status'), from: q(req, 'from'), to: q(req, 'to'), search: q(req, 'search'), clientId: q(req, 'clientId'), skip, limit },
+      {
+        status: q(req, 'status'),
+        from: q(req, 'from'),
+        to: q(req, 'to'),
+        search: q(req, 'search'),
+        clientId: q(req, 'clientId'),
+        when: q(req, 'when') as 'upcoming' | 'past' | undefined,
+        balance: q(req, 'balance') as 'due' | 'cleared' | undefined,
+        sort: q(req, 'sort') as any,
+        skip,
+        limit,
+      },
       financials(req)
     );
-    ApiResponse.paginated(res, items, page, limit, total);
+    res.status(200).json({
+      status: 'success',
+      data: items,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total, statusCounts },
+    });
   }, 'list bookings');
 
   static create = handle(async (req: Request, res: Response) => {

@@ -265,28 +265,74 @@ export class VendorBookingService {
 
   static async list(
     vendorId: Id,
-    q: { status?: string; from?: string; to?: string; search?: string; clientId?: string; skip: number; limit: number },
+    q: {
+      status?: string;
+      from?: string;
+      to?: string;
+      search?: string;
+      clientId?: string;
+      when?: 'upcoming' | 'past';
+      balance?: 'due' | 'cleared';
+      sort?: 'eventDate' | 'eventDateDesc' | 'newest' | 'oldest';
+      skip: number;
+      limit: number;
+    },
     includeFinancials: boolean
   ) {
-    const filter: any = { vendorId };
-    if (q.status) filter.status = { $in: q.status.split(',') };
-    if (q.clientId) filter.clientId = toObjectId(q.clientId, 'Client');
-    if (q.from || q.to) {
-      const range: any = {};
-      if (q.from) range.$gte = toDateOnly(q.from);
-      if (q.to) range.$lte = toDateOnly(q.to);
-      filter.events = { $elemMatch: { date: range } };
-    }
+    // `base` holds every filter except status, so the status tab counts
+    // reflect the current search/date filters.
+    const base: any = { vendorId };
+    if (q.clientId) base.clientId = toObjectId(q.clientId, 'Client');
+    const dateRange: any = {};
+    if (q.from) dateRange.$gte = toDateOnly(q.from);
+    if (q.to) dateRange.$lte = toDateOnly(q.to);
+    const today = todayIST();
+    if (q.when === 'upcoming') dateRange.$gte = dateRange.$gte && dateRange.$gte > today ? dateRange.$gte : today;
+    if (Object.keys(dateRange).length) base.events = { $elemMatch: { date: dateRange } };
+    // "Past" = every event is before today.
+    if (q.when === 'past') base['events.date'] = { $not: { $gte: today } };
     if (q.search) {
       const rx = new RegExp(escapeRegex(q.search), 'i');
-      filter.$or = [{ 'client.name': rx }, { 'client.phone': rx }, { bookingNumber: rx }, { title: rx }];
+      const digits = q.search.replace(/\D/g, '');
+      base.$or = [
+        { 'client.name': rx },
+        { bookingNumber: rx },
+        { title: rx },
+        { 'events.venue': rx },
+        { 'events.functionType': rx },
+        // Phone only for number-like queries ("B-0001" must not match phones containing 0001).
+        ...(digits.length >= 3 && /^[\d\s+()-]+$/.test(q.search) ? [{ 'client.phone': new RegExp(digits) }] : []),
+      ];
     }
+    if (includeFinancials && q.balance === 'due') base.balanceDue = { $gt: 0 };
+    if (includeFinancials && q.balance === 'cleared') base.balanceDue = { $lte: 0 };
+
+    const filter: any = { ...base };
+    if (q.status) filter.status = { $in: q.status.split(',') };
+
+    const sort: Record<string, 1 | -1> =
+      q.sort === 'newest'
+        ? { createdAt: -1 }
+        : q.sort === 'oldest'
+          ? { createdAt: 1 }
+          : q.sort === 'eventDateDesc'
+            ? { 'events.0.date': -1, createdAt: -1 }
+            : { 'events.0.date': 1, createdAt: -1 };
+
     const projection = includeFinancials ? {} : Object.fromEntries(FINANCIAL_FIELDS.map((f) => [f, 0]));
-    const [items, total] = await Promise.all([
-      VendorBooking.find(filter, projection).sort({ 'events.0.date': 1, createdAt: -1 }).skip(q.skip).limit(q.limit).lean(),
+    const [items, total, counts] = await Promise.all([
+      VendorBooking.find(filter, projection)
+        .sort(sort)
+        .skip(q.skip)
+        .limit(q.limit)
+        .populate('events.resourceAllocations.resourceId', 'name type color')
+        .lean(),
       VendorBooking.countDocuments(filter),
+      VendorBooking.aggregate([{ $match: base }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
     ]);
-    return { items, total };
+    const statusCounts = Object.fromEntries(['hold', 'tentative', 'confirmed', 'completed', 'cancelled'].map((st) => [st, 0]));
+    for (const c of counts) statusCounts[c._id] = c.n;
+    return { items, total, statusCounts };
   }
 
   static async update(

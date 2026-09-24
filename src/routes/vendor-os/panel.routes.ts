@@ -99,7 +99,7 @@ router.delete('/calendar/blocks/:blockId', office, Calendar.deleteBlock);
 // ---------------------------------------------------------------------------
 // M3 — Bookings, payments, dues
 // ---------------------------------------------------------------------------
-router.get('/bookings', office, Booking.list);
+router.get('/bookings', office, validate(v.listBookingsSchema), Booking.list);
 router.post('/bookings', office, validate(v.createBookingSchema), Booking.create);
 router.get('/bookings/:bookingId', office, Booking.get);
 router.patch('/bookings/:bookingId', office, validate(v.updateBookingSchema), Booking.update);
