@@ -7,6 +7,13 @@ export interface IVendorAlbum extends Document {
   coverImage?: string;
   mediaCount: number;
   sortOrder: number;
+  // Vendor OS portfolio tagging (spec 4.3) — function (haldi/sangeet/...),
+  // themes (pastel/royal/...), and where the wedding was.
+  functionTag?: string;
+  themeTags?: string[];
+  venue?: string;
+  city?: string;
+  season?: string;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -45,6 +52,12 @@ const vendorAlbumSchema = new Schema<IVendorAlbum>(
       type: Number,
       default: 0,
     },
+
+    functionTag: { type: String, trim: true },
+    themeTags: { type: [String], default: [] },
+    venue: { type: String, trim: true },
+    city: { type: String, trim: true },
+    season: { type: String, trim: true },
 
     isDeleted: {
       type: Boolean,

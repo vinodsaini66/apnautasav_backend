@@ -107,6 +107,54 @@ export interface IVendor extends Document {
         rentalPrice?: number;
     };
 
+    // ---------------------------------------------------------------
+    // Vendor OS (spec: ApnaUtsav-Vendor-OS-Product-Spec.pdf). A listing
+    // created through the Vendor OS panel is this same document — the
+    // vendor's working data (packages, portfolio, availability) IS the
+    // public listing. All fields below are optional/defaulted so imported
+    // and admin-created listings are unaffected.
+    // ---------------------------------------------------------------
+    source?: 'admin' | 'import' | 'vendor_os';
+    osEnabled?: boolean;
+    osPlan?: 'free' | 'pro' | 'business';
+    osCategory?: string; // CategoryConfig.key
+    tagline?: string;
+    coverImages?: string[];
+    subTags?: string[];
+    travelPolicy?: string;
+    weddingsDone?: number;
+    gstNumber?: string;
+    upiId?: string;
+    brochureUrl?: string;
+    socialLinks?: {
+        instagram?: string;
+        facebook?: string;
+        youtube?: string;
+        pinterest?: string;
+    };
+    verification?: {
+        phone?: boolean;
+        gst?: boolean;
+        identity?: boolean;
+        visited?: boolean;
+    };
+    policies?: {
+        advancePercent?: number;
+        advance?: string;
+        cancellation?: string;
+        // Structured payment schedule (e.g. 30% at booking / 20% 30 days
+        // prior / 50% on the day) — also the default for new quotes.
+        schedule?: { label: string; when?: string; percent: number }[];
+        nonRefundableAdvance?: boolean;
+        allowDateChange?: boolean;
+    };
+    // Category-specific profile fields (profile_json), shape defined by the
+    // CategoryConfig's profileSchema.
+    categoryProfile?: Record<string, any>;
+    profileCompleteness?: number;
+    firstPublishedAt?: Date;
+    reviewNote?: string;
+
     createdAt: Date;
     updatedAt: Date;
 }
@@ -361,6 +409,54 @@ const vendorSchema = new Schema<IVendor>(
             nonVegPricePerPlate: Number,
             rentalPrice: Number,
         },
+
+        source: {
+            type: String,
+            enum: ['admin', 'import', 'vendor_os'],
+            default: 'admin',
+        },
+        osEnabled: { type: Boolean, default: false, index: true },
+        osPlan: {
+            type: String,
+            enum: ['free', 'pro', 'business'],
+            default: 'free',
+        },
+        osCategory: { type: String, trim: true, lowercase: true, index: true },
+        tagline: { type: String, trim: true, maxlength: 160 },
+        coverImages: { type: [String], default: [] },
+        subTags: { type: [String], default: [] },
+        travelPolicy: { type: String, trim: true, maxlength: 500 },
+        weddingsDone: { type: Number, default: 0 },
+        gstNumber: { type: String, trim: true, uppercase: true },
+        upiId: { type: String, trim: true },
+        brochureUrl: String,
+        socialLinks: {
+            instagram: String,
+            facebook: String,
+            youtube: String,
+            pinterest: String,
+        },
+        verification: {
+            phone: { type: Boolean, default: false },
+            gst: { type: Boolean, default: false },
+            identity: { type: Boolean, default: false },
+            visited: { type: Boolean, default: false },
+        },
+        policies: {
+            advancePercent: { type: Number, min: 0, max: 100 },
+            advance: { type: String, trim: true, maxlength: 1000 },
+            cancellation: { type: String, trim: true, maxlength: 1000 },
+            schedule: {
+                type: [{ _id: false, label: String, when: String, percent: Number }],
+                default: undefined,
+            },
+            nonRefundableAdvance: Boolean,
+            allowDateChange: Boolean,
+        },
+        categoryProfile: { type: Schema.Types.Mixed, default: {} },
+        profileCompleteness: { type: Number, default: 0 },
+        firstPublishedAt: Date,
+        reviewNote: { type: String, trim: true, maxlength: 1000 },
     },
     {
         timestamps: true,

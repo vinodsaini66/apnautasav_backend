@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import crypto from 'crypto';
+import fs from 'fs';
 import { env } from './env';
 
 // Lazily built so the server can boot even before real AWS credentials are
@@ -51,6 +52,35 @@ export const uploadBufferToS3 = async (
       Bucket: env.AWS_S3_BUCKET,
       Key: key,
       Body: buffer,
+      ContentType: mimetype,
+    })
+  );
+
+  return `https://${env.AWS_S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+};
+
+/**
+ * Streams a file from disk to S3 (for uploads too large to buffer in memory,
+ * e.g. Vendor OS portfolio videos). Returns the public URL.
+ */
+export const uploadFileToS3 = async (
+  filePath: string,
+  originalName: string,
+  mimetype: string,
+  folder: string
+): Promise<string> => {
+  const client = getS3Client();
+
+  const extension = originalName.includes('.') ? originalName.split('.').pop() : undefined;
+  const key = `${folder}/${Date.now()}-${crypto.randomUUID()}${extension ? `.${extension}` : ''}`;
+  const { size } = await fs.promises.stat(filePath);
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: env.AWS_S3_BUCKET,
+      Key: key,
+      Body: fs.createReadStream(filePath),
+      ContentLength: size,
       ContentType: mimetype,
     })
   );

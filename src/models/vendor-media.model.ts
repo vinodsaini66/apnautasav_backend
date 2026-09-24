@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type VendorMediaType = 'image' | 'video';
+// 'embed' = a YouTube/Instagram URL rendered as an embed (Vendor OS).
+export type VendorMediaType = 'image' | 'video' | 'embed';
 
 export interface IVendorMedia extends Document {
     vendorId: mongoose.Types.ObjectId;
@@ -32,7 +33,7 @@ const vendorMediaSchema = new Schema<IVendorMedia>(
 
         type: {
             type: String,
-            enum: ['image', 'video'],
+            enum: ['image', 'video', 'embed'],
             required: true,
             index: true,
         },

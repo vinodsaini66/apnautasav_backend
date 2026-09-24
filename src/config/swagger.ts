@@ -4694,7 +4694,7 @@ const definition =
 
 const options = {
   definition,
-  apis: ['./src/routes/*.ts', './src/models/*.ts']
+  apis: ['./src/routes/*.ts', './src/routes/vendor-os/*.ts', './src/models/*.ts']
 };
 
 const swaggerSpec = swaggerJsdoc(options);

@@ -330,7 +330,7 @@ export class WeddingVendorController {
         try {
             const { vendorId } = req.params;
             const userId = req.user?.userId;
-            const { fullName, phone, email, whatsappNumber, functionDate, guestCount, functionType, message } = req.body;
+            const { fullName, phone, email, whatsappNumber, functionDate, guestCount, functionType, message, weddingId } = req.body;
 
             if (!fullName || !phone) {
                 ApiResponse.error(res, 400, 'Full name and phone are required');
@@ -346,6 +346,7 @@ export class WeddingVendorController {
                 guestCount: guestCount !== undefined ? Number(guestCount) : undefined,
                 functionType,
                 message,
+                weddingId,
             });
 
             ApiResponse.success(res, 201, {

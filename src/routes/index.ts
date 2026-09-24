@@ -31,6 +31,7 @@ import blogRoutes from './blog.routes';
 import faqRoutes from './faq.routes';
 import testimonialRoutes from './testimonial.routes';
 import statsRoutes from './stats.routes';
+import vendorOsRoutes from './vendor-os';
 
 const router: Router = Router();
 
@@ -70,6 +71,9 @@ router.use('/blogs', blogRoutes);
 router.use('/faqs', faqRoutes);
 router.use('/testimonials', testimonialRoutes);
 router.use('/stats', statsRoutes);
+// Vendor OS: separate vendor panel (own auth) + its public/family/admin
+// endpoints — see routes/vendor-os/index.ts.
+router.use('/vendor-os', vendorOsRoutes);
 
 
 export default router;

@@ -7,6 +7,7 @@ import { VendorInquiry } from '../models/vendor-enquery.model';
 import { Wedding } from '../models/wedding.model';
 import { Collaborator } from '../models/collaborator.model';
 import logger from '../utils/logger';
+import { FamilyBindingService } from './vendor-os/family-binding.service';
 
 export class WeddingVendorService {
 
@@ -512,6 +513,7 @@ export class WeddingVendorService {
       guestCount?: number;
       functionType?: string;
       message?: string;
+      weddingId?: string;
     }
   ) {
     try {
@@ -520,8 +522,20 @@ export class WeddingVendorService {
         throw new Error('Wedding vendor not found');
       }
 
+      // Only link the enquiry to a wedding the caller actually belongs to —
+      // a linked wedding later receives budget/tracker rows from Vendor OS.
+      let weddingId: mongoose.Types.ObjectId | undefined;
+      if (data.weddingId && userId && mongoose.Types.ObjectId.isValid(data.weddingId)) {
+        const [owned, collaborator] = await Promise.all([
+          Wedding.exists({ _id: data.weddingId, $or: [{ createdBy: userId }, { members: userId }] }),
+          Collaborator.exists({ weddingId: data.weddingId, userId, invitationStatus: 'accepted' }),
+        ]);
+        if (owned || collaborator) weddingId = new mongoose.Types.ObjectId(data.weddingId);
+      }
+
       const inquiry = await VendorInquiry.create({
         weddingVendorId: vendor._id,
+        weddingId,
         userId: userId ? new mongoose.Types.ObjectId(userId) : undefined,
         fullName: data.fullName,
         phone: data.phone,
@@ -536,6 +550,9 @@ export class WeddingVendorService {
       });
 
       await WeddingVendor.updateOne({ _id: vendor._id }, { $inc: { inquiryCount: 1 } });
+
+      // Vendor OS: every ApnaUtsav enquiry lands in the vendor's lead inbox.
+      await FamilyBindingService.onMarketplaceInquiry(inquiry);
 
       return inquiry;
     } catch (error) {
