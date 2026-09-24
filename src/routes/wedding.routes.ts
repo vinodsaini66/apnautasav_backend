@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth.middleware';
 import { checkWeddingAccess, checkPermission } from '../middleware/authorization.middleware';
 import { checkWeddingCreationLimit } from '../middleware/planLimit.middleware';
 import { validate } from '../middleware/validation.middleware';
+import { imageUpload } from '../middleware/upload.middleware';
 import { createWeddingSchema, updateWeddingSchema, joinWeddingSchema, updatePublicSettingsSchema } from '../validators/wedding.validator';
 import { CollaboratorRole } from '../types';
 
@@ -30,6 +31,7 @@ router.post('/join', validate(joinWeddingSchema), WeddingController.joinWedding)
 router.get('/:weddingId', checkWeddingAccess, WeddingController.getWeddingById);
 router.get('/:weddingId/plan', checkWeddingAccess, WeddingController.getWeddingPlan);
 router.put('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(updateWeddingSchema), WeddingController.updateWedding);
+router.post('/:weddingId/image', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), imageUpload.single('image'), WeddingController.uploadImage);
 router.delete('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), WeddingController.deleteWedding);
 router.get('/:weddingId/stats', checkWeddingAccess, WeddingController.getWeddingStats);
 router.get('/:weddingId/console', checkWeddingAccess, WeddingController.getConsoleOverview);

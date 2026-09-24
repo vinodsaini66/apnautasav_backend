@@ -17,6 +17,7 @@ import CollaborationInvitation from '../models/collaborationInvitation';
 import { generateWeddingCode, ensurePublicSlug } from '../utils/generateCode';
 import { mapMarketplaceCategoryToVendorCategory } from '../utils/vendorCategoryMapping';
 import { ApiResponse } from '../utils/apiResponse';
+import { uploadBufferToS3, deleteObjectFromS3ByUrl } from '../config/s3';
 import { ActivityService } from '../services/activity.service';
 import { PlanResolutionService } from '../services/plan-resolution.service';
 import { computeWeddingStats, getWeddingFunctionsSummary, getConsoleOverview } from '../services/wedding-stats.service';
@@ -324,6 +325,69 @@ export class WeddingController {
     } catch (error: any) {
       logger.error('Update wedding error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to update wedding');
+    }
+  }
+
+  static async uploadImage(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.file) {
+        ApiResponse.error(res, 400, 'No image file provided (field name: "image")');
+        return;
+      }
+
+      const { weddingId } = req.params;
+      const userId = req.user?.userId;
+
+      const previousWedding = await Wedding.findById(weddingId).select('imageUrl');
+      if (!previousWedding) {
+        ApiResponse.error(res, 404, 'Wedding not found');
+        return;
+      }
+      const oldImageUrl = previousWedding.imageUrl;
+
+      const url = await uploadBufferToS3(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        'wedding-covers'
+      );
+
+      const wedding = await Wedding.findByIdAndUpdate(
+        weddingId,
+        { $set: { imageUrl: url } },
+        { new: true }
+      );
+
+      if (!wedding) {
+        ApiResponse.error(res, 404, 'Wedding not found');
+        return;
+      }
+
+      if (oldImageUrl) {
+        try {
+          await deleteObjectFromS3ByUrl(oldImageUrl);
+        } catch (cleanupError) {
+          logger.error('Failed to delete previous wedding cover image from S3:', cleanupError);
+        }
+      }
+
+      await ActivityService.logActivity({
+        weddingId: String(wedding._id),
+        userId: userId!,
+        actionType: 'updated',
+        entityType: 'wedding',
+        entityId: String(wedding._id),
+        entityName: `${wedding.brideName} & ${wedding.groomName}`,
+        description: 'Updated wedding cover image'
+      });
+
+      ApiResponse.success(res, 200, {
+        message: 'Wedding cover image uploaded successfully',
+        data: wedding
+      });
+    } catch (error: any) {
+      logger.error('Upload wedding image error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to upload wedding cover image');
     }
   }
 
