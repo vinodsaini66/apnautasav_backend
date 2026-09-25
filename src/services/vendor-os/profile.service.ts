@@ -47,6 +47,9 @@ const EDITABLE_FIELDS = [
   'policies',
   'profileDetails',
   'awards',
+  'documents',
+  'messageLanguage',
+  'showExactAddress',
 ] as const;
 
 const PHOTOS_FOR_FEATURED = 10;
@@ -102,7 +105,7 @@ export class VendorProfileService {
   // -------------------------------------------------------------------
 
   static async getProfile(vendorId: mongoose.Types.ObjectId) {
-    const vendor = await WeddingVendor.findById(vendorId).lean();
+    const vendor = await WeddingVendor.findById(vendorId).select('+documents').lean();
     if (!vendor) throw notFound('Vendor');
     const config = vendor.osCategory ? await CategoryConfigService.getByKey(vendor.osCategory).catch(() => null) : null;
     const completeness = await this.computeCompleteness(vendorId);
@@ -125,6 +128,13 @@ export class VendorProfileService {
     if (update.phone) update.phone = normalizePhone(update.phone);
     if (update.whatsappNumber) update.whatsappNumber = normalizePhone(update.whatsappNumber);
     if (update.location) update.location = { ...(vendor.toObject().location || {}), ...update.location };
+    if (update.socialLinks) update.socialLinks = { ...(vendor.toObject().socialLinks || {}), ...update.socialLinks };
+    if (update.documents) {
+      update.documents = update.documents.map((d: any) => ({ ...d, uploadedAt: d.uploadedAt || new Date() }));
+      // The brochure doubles as the listing's brochureUrl (shared from the lead inbox).
+      const brochure = update.documents.find((d: any) => d.key === 'brochure');
+      update.brochureUrl = brochure?.url || null;
+    }
     if (update.policies) update.policies = { ...(vendor.toObject().policies || {}), ...update.policies };
 
     // Badges are earned, not typed: changing the GST number drops the GST
@@ -268,6 +278,11 @@ export class VendorProfileService {
       PublicVendorOsService.availability(String(vendorId), formatDateKey(today), formatDateKey(addDays(today, 89))),
     ]);
     const { reviewNote: _r, osPlan: _p, gstNumber: _g, upiId: _u, ...publicVendor } = vendor as any;
+    // Families see only area + city unless the vendor opts in (Edit Profile → Address).
+    if (!vendor.showExactAddress && publicVendor.location) {
+      const { address: _a, latitude: _lat, longitude: _lng, ...area } = publicVendor.location;
+      publicVendor.location = area;
+    }
     return { vendor: publicVendor, packages, albums, media, availability };
   }
 }

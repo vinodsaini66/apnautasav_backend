@@ -6,6 +6,8 @@ import { VendorClient } from '../../models/vendor-os/vendor-client.model';
 import { VendorQuote } from '../../models/vendor-os/vendor-quote.model';
 import { VendorActivity } from '../../models/vendor-os/vendor-activity.model';
 import { VendorResource } from '../../models/vendor-os/vendor-resource.model';
+import { CrewAssignment } from '../../models/vendor-os/crew-assignment.model';
+import { RunSheet } from '../../models/vendor-os/run-sheet.model';
 import { WeddingVendor } from '../../models/wedding-vendor.model';
 import { nextVendorSequence } from '../../models/vendor-os/vendor-counter.model';
 import { CalendarService } from './calendar.service';
@@ -253,14 +255,33 @@ export class VendorBookingService {
       .populate('events.resourceAllocations.resourceId', 'name type capacity')
       .lean();
     if (!booking) throw notFound('Booking');
-    const [payments, quote, lead, timeline] = await Promise.all([
+    const [payments, quote, lead, timeline, crewRows, runSheets] = await Promise.all([
       includeFinancials ? VendorPayment.find({ bookingId: booking._id }).sort({ receivedAt: -1 }).lean() : Promise.resolve(undefined),
       booking.quoteId ? VendorQuote.findById(booking.quoteId).select('quoteNumber status total version').lean() : null,
       booking.leadId ? VendorLead.findById(booking.leadId).select('source status contact').lean() : null,
       VendorActivity.find({ vendorId, bookingId: booking._id }).sort({ createdAt: -1 }).limit(100).populate('createdBy', 'name').lean(),
+      // Per-function crew summary for the booking drawer (who's on it, who hasn't confirmed).
+      CrewAssignment.find({ bookingId: booking._id, kind: 'event', status: { $ne: 'cancelled' } })
+        .select('bookingEventId status active crewMemberId')
+        .populate('crewMemberId', 'name')
+        .lean(),
+      RunSheet.find({ bookingId: booking._id }).select('bookingEventId items.status sharedWithClient').lean(),
     ]);
+    const crew = booking.events.map((e) => {
+      const rows = crewRows.filter((a: any) => String(a.bookingEventId) === String(e._id));
+      const sheet = runSheets.find((r) => String(r.bookingEventId) === String(e._id));
+      return {
+        eventId: e._id,
+        assigned: rows.filter((a) => a.active).length,
+        confirmed: rows.filter((a) => a.active && a.status === 'confirmed').length,
+        pending: rows.filter((a) => a.active && a.status === 'assigned').length,
+        declined: rows.filter((a) => a.status === 'declined').length,
+        names: rows.filter((a) => a.active).map((a: any) => a.crewMemberId?.name).filter(Boolean),
+        runSheet: sheet ? { items: sheet.items.length, done: sheet.items.filter((i) => i.status === 'done').length, shared: sheet.sharedWithClient } : null,
+      };
+    });
     const base = includeFinancials ? booking : stripFinancials(booking);
-    return { ...base, payments, quote, lead, timeline };
+    return { ...base, payments, quote, lead, timeline, crew };
   }
 
   static async list(

@@ -56,7 +56,18 @@ export class VendorCrewService {
       const rx = new RegExp(escapeRegex(q.search), 'i');
       filter.$or = [{ name: rx }, { phone: rx }, { role: rx }, { skills: rx }];
     }
-    return CrewMember.find(filter).sort({ isActive: -1, name: 1 }).populate('defaultResourceId', 'name type').lean();
+    const members = await CrewMember.find(filter).sort({ isActive: -1, name: 1 }).populate('defaultResourceId', 'name type').lean();
+    // Upcoming work per member for the roster (next assignment + count).
+    const upcoming = await CrewAssignment.aggregate([
+      { $match: { vendorId, kind: 'event', active: true, date: { $gte: todayIST() }, crewMemberId: { $in: members.map((m) => m._id) } } },
+      { $sort: { date: 1 } },
+      { $group: { _id: '$crewMemberId', count: { $sum: 1 }, next: { $first: '$date' }, pending: { $sum: { $cond: [{ $eq: ['$status', 'assigned'] }, 1, 0] } } } },
+    ]);
+    const map = new Map(upcoming.map((u: any) => [String(u._id), u]));
+    return members.map((m) => {
+      const u = map.get(String(m._id));
+      return { ...m, upcomingCount: u?.count || 0, pendingCount: u?.pending || 0, nextDate: u ? formatDateKey(u.next) : null, hasLogin: !!m.vendorUserId };
+    });
   }
 
   private static async assertResource(vendorId: Id, resourceId?: string | null) {
@@ -68,7 +79,8 @@ export class VendorCrewService {
   static async createMember(vendorId: Id, data: any) {
     const phone = normalizePhone(data.phone);
     if (phone.length !== 10) throw badRequest('Enter a valid 10-digit mobile number');
-    if (await CrewMember.exists({ vendorId, phone })) throw badRequest('A crew member with this phone already exists');
+    const existing = await CrewMember.findOne({ vendorId, phone }).select('name').lean();
+    if (existing) throw conflict(`${existing.name} already has this number`, { code: 'DUPLICATE_CREW', crewMemberId: existing._id, name: existing.name });
     await this.assertResource(vendorId, data.defaultResourceId);
 
     // Link to a panel login with the same phone (team member with role crew).
@@ -88,8 +100,8 @@ export class VendorCrewService {
     if (rest.phone) {
       rest.phone = normalizePhone(rest.phone);
       if (rest.phone.length !== 10) throw badRequest('Enter a valid 10-digit mobile number');
-      const dup = await CrewMember.exists({ vendorId, phone: rest.phone, _id: { $ne: member._id } });
-      if (dup) throw badRequest('Another crew member already has this phone');
+      const dup = await CrewMember.findOne({ vendorId, phone: rest.phone, _id: { $ne: member._id } }).select('name').lean();
+      if (dup) throw conflict(`${dup.name} already has this number`, { code: 'DUPLICATE_CREW', crewMemberId: dup._id, name: dup.name });
       const user = await VendorUser.findOne({ vendorId, phone: rest.phone }).select('_id').lean();
       member.vendorUserId = user?._id as Id | undefined;
     }
@@ -574,9 +586,10 @@ export class VendorCrewService {
   // -------------------------------------------------------------------
 
   static async payouts(vendorId: Id, q: { from?: string; to?: string; crewMemberId?: string; status?: string }) {
+    // Totals and the per-member summary cover every payout status; `status`
+    // only narrows the returned rows (the list's To pay / Paid tabs).
     const filter: any = { vendorId, kind: 'event', status: { $nin: ['declined', 'cancelled'] }, fee: { $gt: 0 } };
     if (q.crewMemberId) filter.crewMemberId = toObjectId(q.crewMemberId, 'Crew member');
-    if (q.status) filter.payoutStatus = q.status;
     if (q.from || q.to) {
       filter.date = {};
       if (q.from) filter.date.$gte = toDateOnly(q.from);
@@ -600,8 +613,9 @@ export class VendorCrewService {
       byMember.set(key, row);
     }
     const summary = [...byMember.values()].sort((x, y) => y.unpaid - x.unpaid);
+    const rows = q.status ? items.filter((a: any) => (a.payoutStatus || 'unpaid') === q.status) : items;
     return {
-      items: items.map((a: any) => ({ ...a, date: formatDateKey(a.date) })),
+      items: rows.map((a: any) => ({ ...a, date: formatDateKey(a.date) })),
       summary,
       totals: {
         total: round2(summary.reduce((s, r) => s + r.total, 0)),

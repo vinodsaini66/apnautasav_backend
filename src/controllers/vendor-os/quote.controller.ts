@@ -11,15 +11,20 @@ import { q, userIdOf, vendorIdOf } from './_context';
 export class VendorOsQuoteController {
   static list = handle(async (req: Request, res: Response) => {
     const { page, limit, skip } = parsePagination(req.query);
-    const { items, total } = await VendorQuoteService.list(vendorIdOf(req), {
+    const { items, total, statusCounts } = await VendorQuoteService.list(vendorIdOf(req), {
       status: q(req, 'status'),
       leadId: q(req, 'leadId'),
       clientId: q(req, 'clientId'),
       search: q(req, 'search'),
+      sort: q(req, 'sort') as any,
       skip,
       limit,
     });
-    ApiResponse.paginated(res, items, page, limit, total);
+    res.status(200).json({
+      status: 'success',
+      data: items,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total, statusCounts },
+    });
   }, 'list quotes');
 
   static create = handle(async (req: Request, res: Response) => {

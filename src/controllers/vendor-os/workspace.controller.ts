@@ -80,6 +80,10 @@ export class VendorOsWorkspaceController {
     ApiResponse.success(res, 200, { message: 'Team member updated', data: await VendorTeamService.update(vendorIdOf(req), req.params.memberId, req.body, userIdOf(req)) });
   }, 'update member');
 
+  static reinviteMember = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { data: await VendorTeamService.reinvite(vendorIdOf(req), req.params.memberId) });
+  }, 'reinvite member');
+
   static removeMember = handle(async (req: Request, res: Response) => {
     await VendorTeamService.remove(vendorIdOf(req), req.params.memberId, userIdOf(req));
     ApiResponse.success(res, 200, { message: 'Team member removed' });

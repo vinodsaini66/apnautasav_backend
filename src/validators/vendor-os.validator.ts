@@ -12,6 +12,8 @@ import {
   RESOURCE_TYPES,
   VENDOR_OS_PLANS,
   BOOKING_STATUSES,
+  QUOTE_STATUSES,
+  NOTIFICATION_CATEGORIES,
 } from '../constants/vendorOs';
 
 // Request validation for every Vendor OS route (routes/vendor-os/*).
@@ -47,6 +49,9 @@ export const updateMeSchema = z.object({
     name: shortText(100).optional(),
     language: z.enum(['en', 'hi']).optional(),
     fcmToken: shortText(500).optional(),
+    notificationPrefs: z
+      .record(z.enum(NOTIFICATION_CATEGORIES), z.object({ push: z.boolean().optional(), whatsapp: z.boolean().optional() }))
+      .optional(),
   }),
 });
 
@@ -123,14 +128,14 @@ export const updateProfileSchema = z.object({
       tagline: shortText(160),
       description: shortText(5000),
       shortDescription: shortText(500),
-      logo: url,
+      logo: url.or(z.literal('')),
       coverImages: z.array(url).max(8),
       contactPerson: shortText(100),
       email: z.string().email(),
       phone,
       alternatePhone: phone,
       whatsappNumber: phone,
-      website: url,
+      website: url.or(z.literal('')),
       location: locationSchema,
       locations: z.array(locationSchema.extend({ label: shortText(100).optional(), phone: phone.optional(), whatsappNumber: phone.optional() })).max(10),
       serviceCities: z.array(shortText(100)).max(50),
@@ -143,7 +148,18 @@ export const updateProfileSchema = z.object({
       gstNumber: z.string().trim().regex(/^[0-9A-Z]{15}$/i, 'GSTIN must be 15 characters').or(z.literal('')),
       upiId: z.string().trim().regex(/^[\w.-]+@[\w.-]+$/, 'Invalid UPI ID').or(z.literal('')),
       brochureUrl: url,
-      socialLinks: z.object({ instagram: url.optional(), facebook: url.optional(), youtube: url.optional(), pinterest: url.optional() }),
+      socialLinks: z.object({
+        instagram: url.or(z.literal('')).optional(),
+        facebook: url.or(z.literal('')).optional(),
+        youtube: url.or(z.literal('')).optional(),
+        pinterest: url.or(z.literal('')).optional(),
+        googleBusiness: url.or(z.literal('')).optional(),
+      }),
+      documents: z
+        .array(z.object({ key: z.string().trim().min(1).max(40), label: shortText(120), url, name: shortText(200).optional() }))
+        .max(30),
+      messageLanguage: z.enum(MESSAGE_LANGUAGES),
+      showExactAddress: z.boolean(),
       policies: z.object({
         advancePercent: z.number().min(0).max(100).optional(),
         advance: shortText(1000).optional(),
@@ -336,11 +352,28 @@ export const leadFollowUpSchema = z.object({
 
 const clientBody = z.object({
   name: z.string().trim().min(1).max(120),
+  contactPerson: shortText(120).optional(),
   phone,
-  email: z.string().email().optional(),
+  email: z.string().trim().email().or(z.literal('')).optional(),
   city: shortText(100).optional(),
+  address: shortText(500).optional(),
   notes: shortText(2000).optional(),
   tags: z.array(shortText(50)).max(20).optional(),
+});
+export const listClientsSchema = z.object({
+  query: z
+    .object({
+      page: z.string().regex(/^\d+$/).optional(),
+      limit: z.string().regex(/^\d+$/).optional(),
+      search: z.string().trim().max(100).optional(),
+      tag: shortText(50).optional(),
+      sort: z.enum(['recent', 'name', 'value', 'bookings', 'newest']).optional(),
+    })
+    .passthrough(),
+});
+export const clientNoteSchema = z.object({
+  params: idParam('clientId'),
+  body: z.object({ type: z.enum(['note', 'call', 'meeting']).default('note'), text: z.string().trim().min(1).max(5000) }),
 });
 export const createClientSchema = z.object({ body: clientBody });
 export const updateClientSchema = z.object({ params: idParam('clientId'), body: clientBody.partial() });
@@ -395,6 +428,22 @@ export const createQuoteSchema = z.object({
   }),
 });
 export const updateQuoteSchema = z.object({ params: idParam('quoteId'), body: quoteContent });
+export const listQuotesSchema = z.object({
+  query: z
+    .object({
+      page: z.string().regex(/^\d+$/).optional(),
+      limit: z.string().regex(/^\d+$/).optional(),
+      search: z.string().trim().max(100).optional(),
+      status: z
+        .string()
+        .refine((v) => v.split(',').every((s) => (QUOTE_STATUSES as readonly string[]).includes(s)), 'Unknown quote status')
+        .optional(),
+      leadId: objectId.optional(),
+      clientId: objectId.optional(),
+      sort: z.enum(['newest', 'oldest', 'eventDate', 'validTill', 'total']).optional(),
+    })
+    .passthrough(),
+});
 export const quoteStatusSchema = z.object({
   params: idParam('quoteId'),
   body: z.object({ status: z.enum(['accepted', 'declined']), reason: shortText(500).optional() }),
@@ -490,6 +539,26 @@ export const recordPaymentSchema = z.object({
     notes: shortText(1000).optional(),
   }),
 });
+export const listPaymentsSchema = z.object({
+  query: z
+    .object({
+      page: z.string().regex(/^\d+$/).optional(),
+      limit: z.string().regex(/^\d+$/).optional(),
+      from: dateStr.optional(),
+      to: dateStr.optional(),
+      mode: z
+        .string()
+        .refine((v) => v.split(',').every((m) => (PAYMENT_MODES as readonly string[]).includes(m)), 'Unknown payment mode')
+        .optional(),
+      bookingId: objectId.optional(),
+      search: z.string().trim().max(100).optional(),
+      includeVoided: z.enum(['true', 'false']).optional(),
+    })
+    .passthrough(),
+});
+export const paymentDuesSchema = z.object({
+  query: z.object({ bucket: z.enum(['week', 'overdue', 'today', 'upcoming']).optional() }).passthrough(),
+});
 export const voidPaymentSchema = z.object({ params: idParam('paymentId'), body: z.object({ reason: z.string().trim().min(1).max(500) }) });
 export const reminderSchema = z.object({
   params: idParam('bookingId'),
@@ -539,7 +608,13 @@ export const updateMessageTemplateSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const inviteMemberSchema = z.object({
-  body: z.object({ name: z.string().trim().min(1).max(100), phone, role: z.enum(['manager', 'staff', 'crew']) }),
+  body: z.object({
+    name: z.string().trim().min(1).max(100),
+    phone,
+    email: z.string().trim().email().or(z.literal('')).optional(),
+    role: z.enum(['manager', 'staff', 'crew']),
+    crew: z.object({ defaultResourceId: objectId.nullable().optional(), role: shortText(80).optional() }).optional(),
+  }),
 });
 export const updateMemberSchema = z.object({
   params: idParam('memberId'),

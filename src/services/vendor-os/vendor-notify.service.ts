@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { NOTIFICATION_CATEGORY_OF } from '../../constants/vendorOs';
 import { VendorNotification, IVendorNotification } from '../../models/vendor-os/vendor-notification.model';
 import { VendorActivity, VendorActivityType, IVendorActivity } from '../../models/vendor-os/vendor-activity.model';
 import { VendorUser } from '../../models/vendor-os/vendor-user.model';
@@ -32,7 +33,11 @@ export class VendorNotifyService {
       )
         .select('+fcmTokens')
         .lean();
-      const tokens = recipients.flatMap((r: any) => r.fcmTokens || []);
+      // Settings → Notifications: skip push for people who switched this category off.
+      const category = NOTIFICATION_CATEGORY_OF[params.type];
+      const tokens = recipients
+        .filter((r: any) => !category || r.notificationPrefs?.[category]?.push !== false)
+        .flatMap((r: any) => r.fcmTokens || []);
       if (tokens.length) {
         await sendPushNotification({
           tokens,

@@ -95,6 +95,27 @@ router.post('/verify-otp', authRateLimiter, validate(verifyOtpSchema), C.verifyO
 // ---- session ---------------------------------------------------------------
 router.post('/refresh-token', validate(refreshSchema), C.refresh);
 router.get('/me', vendorAuth, C.me);
+/**
+ * @swagger
+ * /vendor-os/auth/me:
+ *   patch:
+ *     summary: Update my name, language or notification preferences (Settings)
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               language: { type: string, enum: [en, hi] }
+ *               notificationPrefs:
+ *                 type: object
+ *                 description: "Per category (leads, followUps, quotes, payments, bookings, crew): { push, whatsapp }. Push off skips FCM for that category; merged per key."
+ *                 example: { quotes: { push: false } }
+ *     responses: { 200: { description: My user } }
+ */
 router.patch('/me', vendorAuth, validate(updateMeSchema), C.updateMe);
 router.post('/logout', vendorAuth, C.logout);
 router.post('/resend-verification', vendorAuth, C.resendVerification);

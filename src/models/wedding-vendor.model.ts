@@ -126,11 +126,18 @@ export interface IVendor extends Document {
     gstNumber?: string;
     upiId?: string;
     brochureUrl?: string;
+    /** Private files (GST certificate, PAN, licences…). select: false — never sent on public reads. */
+    documents?: { key: string; label: string; url: string; name?: string; uploadedAt?: Date }[];
+    /** Default language for WhatsApp templates (Settings). */
+    messageLanguage?: 'hinglish' | 'en' | 'hi';
+    /** Show the street address publicly; otherwise only area + city. */
+    showExactAddress?: boolean;
     socialLinks?: {
         instagram?: string;
         facebook?: string;
         youtube?: string;
         pinterest?: string;
+        googleBusiness?: string;
     };
     verification?: {
         phone?: boolean;
@@ -430,11 +437,28 @@ const vendorSchema = new Schema<IVendor>(
         gstNumber: { type: String, trim: true, uppercase: true },
         upiId: { type: String, trim: true },
         brochureUrl: String,
+        documents: {
+            type: [
+                {
+                    _id: false,
+                    key: { type: String, required: true },
+                    label: { type: String, required: true },
+                    url: { type: String, required: true },
+                    name: String,
+                    uploadedAt: { type: Date, default: Date.now },
+                },
+            ],
+            default: undefined,
+            select: false,
+        },
+        messageLanguage: { type: String, enum: ['hinglish', 'en', 'hi'] },
+        showExactAddress: { type: Boolean, default: false },
         socialLinks: {
             instagram: String,
             facebook: String,
             youtube: String,
             pinterest: String,
+            googleBusiness: String,
         },
         verification: {
             phone: { type: Boolean, default: false },

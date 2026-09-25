@@ -446,6 +446,7 @@ export class VendorAuthService {
       role: user.role,
       status: user.status,
       language: user.language,
+      notificationPrefs: user.notificationPrefs || {},
       vendorId: user.vendorId,
     };
   }
@@ -500,11 +501,21 @@ export class VendorAuthService {
     return { vendorUser, vendor, onboarding, needsOnboarding };
   }
 
-  static async updateMe(vendorUserId: string, data: { name?: string; language?: 'en' | 'hi'; fcmToken?: string }) {
+  static async updateMe(
+    vendorUserId: string,
+    data: { name?: string; language?: 'en' | 'hi'; fcmToken?: string; notificationPrefs?: Record<string, { push?: boolean; whatsapp?: boolean }> }
+  ) {
     const user = await VendorUser.findById(vendorUserId).select('+fcmTokens');
     if (!user) throw new VendorOsError(401, 'Session expired');
     if (data.name !== undefined) user.name = data.name;
     if (data.language) user.language = data.language;
+    if (data.notificationPrefs) {
+      // Merge per category so the panel can save one switch at a time.
+      const current = { ...(user.notificationPrefs || {}) };
+      for (const [k, v] of Object.entries(data.notificationPrefs)) current[k] = { ...(current[k] || {}), ...v };
+      user.notificationPrefs = current;
+      user.markModified('notificationPrefs');
+    }
     if (data.fcmToken && !user.fcmTokens.includes(data.fcmToken)) user.fcmTokens = [...user.fcmTokens.slice(-4), data.fcmToken];
     await user.save();
     return this.toPublicUser(user);

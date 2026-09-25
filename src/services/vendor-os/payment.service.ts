@@ -6,7 +6,7 @@ import { nextVendorSequence } from '../../models/vendor-os/vendor-counter.model'
 import { VendorBookingService } from './booking.service';
 import { VendorNotifyService } from './vendor-notify.service';
 import { FamilyBindingService } from './family-binding.service';
-import { addDays, badRequest, formatINR, notFound, round2, toDateOnly, toObjectId, todayIST, DAY_MS } from '../../utils/vendorOs';
+import { addDays, badRequest, escapeRegex, formatINR, notFound, round2, toDateOnly, toObjectId, todayIST, DAY_MS } from '../../utils/vendorOs';
 
 type Id = mongoose.Types.ObjectId;
 
@@ -84,27 +84,73 @@ export class VendorPaymentService {
     return payment;
   }
 
-  static async list(vendorId: Id, q: { from?: string; to?: string; mode?: string; bookingId?: string; includeVoided?: boolean; skip: number; limit: number }) {
+  static async list(
+    vendorId: Id,
+    q: { from?: string; to?: string; mode?: string; bookingId?: string; search?: string; includeVoided?: boolean; skip: number; limit: number }
+  ) {
     const filter: any = { vendorId };
     if (!q.includeVoided) filter.isVoided = false;
-    if (q.mode) filter.mode = q.mode;
+    if (q.mode) filter.mode = { $in: q.mode.split(',') };
     if (q.bookingId) filter.bookingId = toObjectId(q.bookingId, 'Booking');
     if (q.from || q.to) {
       filter.receivedAt = {};
       if (q.from) filter.receivedAt.$gte = toDateOnly(q.from);
       if (q.to) filter.receivedAt.$lt = addDays(toDateOnly(q.to), 1);
     }
+    if (q.search?.trim()) {
+      const term = q.search.trim();
+      const rx = new RegExp(escapeRegex(term), 'i');
+      // Client name / booking number via the booking; phone only for numeric queries.
+      const bookingOr: any[] = [{ 'client.name': rx }, { bookingNumber: rx }, { title: rx }];
+      const digits = term.replace(/\D/g, '');
+      if (/^[\d\s+()-]+$/.test(term) && digits.length >= 3) bookingOr.push({ 'client.phone': new RegExp(escapeRegex(digits.slice(-10))) });
+      const bookings = await VendorBooking.find({ vendorId, $or: bookingOr }).select('_id').lean();
+      filter.$or = [{ receiptNo: rx }, { reference: rx }, { bookingId: { $in: bookings.map((b) => b._id) } }];
+    }
     const [items, total, sum] = await Promise.all([
       VendorPayment.find(filter)
-        .sort({ receivedAt: -1 })
+        .sort({ receivedAt: -1, createdAt: -1 })
         .skip(q.skip)
         .limit(q.limit)
-        .populate('bookingId', 'bookingNumber title client')
+        .populate('bookingId', 'bookingNumber title client paymentSchedule._id paymentSchedule.label')
+        .populate('recordedBy', 'name')
         .lean(),
       VendorPayment.countDocuments(filter),
       VendorPayment.aggregate([{ $match: { ...filter, isVoided: false } }, { $group: { _id: null, amount: { $sum: '$amount' } } }]),
     ]);
-    return { items, total, totalAmount: sum[0]?.amount || 0 };
+    // Name the milestone each payment was applied to, then drop the schedule.
+    const rows = items.map((p: any) => {
+      const booking = p.bookingId;
+      const milestone = p.milestoneId && booking?.paymentSchedule?.find((m: any) => String(m._id) === String(p.milestoneId));
+      if (booking) delete booking.paymentSchedule;
+      return { ...p, milestoneLabel: milestone?.label };
+    });
+    return { items: rows, total, totalAmount: sum[0]?.amount || 0 };
+  }
+
+  /** The Payments screen's three cards (prototype `collect`): due this week, overdue, collected this month. */
+  static async summary(vendorId: Id) {
+    const today = todayIST();
+    const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    const nextMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1));
+    const prevStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1));
+    const collectedIn = (from: Date, to: Date) =>
+      VendorPayment.aggregate([
+        { $match: { vendorId, isVoided: false, receivedAt: { $gte: from, $lt: to } } },
+        { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]).then((r) => ({ amount: round2(r[0]?.amount || 0), count: r[0]?.count || 0 }));
+    const [week, overdue, collected, lastMonth] = await Promise.all([
+      this.dues(vendorId, 'week'),
+      this.dues(vendorId, 'overdue'),
+      collectedIn(monthStart, nextMonth),
+      collectedIn(prevStart, monthStart),
+    ]);
+    return {
+      dueThisWeek: { amount: week.totalDue, count: week.items.length },
+      overdue: { amount: overdue.totalDue, count: overdue.items.length },
+      collectedThisMonth: collected,
+      collectedLastMonth: lastMonth,
+    };
   }
 
   static async getOwned(vendorId: Id, paymentId: string) {
