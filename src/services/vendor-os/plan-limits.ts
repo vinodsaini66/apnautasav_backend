@@ -44,7 +44,7 @@ export const assertWithinPlan = async (vendorId: mongoose.Types.ObjectId, key: L
   if (limit === Infinity) return;
   const used = await currentUsage(vendorId, key);
   if (used + adding > limit) {
-    throw new VendorOsError(402, `Your ${plan} plan allows ${limit} ${LABELS[key]}. Upgrade to Pro for more.`, {
+    throw new VendorOsError(402, `Your ${plan} plan allows ${limit} ${LABELS[key]}. ${plan === 'free' ? 'Upgrade to Pro' : plan === 'pro' ? 'Upgrade to Business' : 'Contact ApnaUtsav'} for more.`, {
       code: 'PLAN_LIMIT',
       limit,
       used,

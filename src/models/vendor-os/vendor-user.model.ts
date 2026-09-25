@@ -44,6 +44,8 @@ export interface IVendorUser extends Document {
   tokenVersion: number;
   fcmTokens: string[];
   language: 'en' | 'hi';
+  /** Settings → Notifications: { leads: { push, whatsapp }, … }. Missing = on. */
+  notificationPrefs?: Record<string, { push?: boolean; whatsapp?: boolean }>;
   lastLoginAt?: Date;
   lastLoginMethod?: 'password' | 'otp' | 'email_link';
   createdAt: Date;
@@ -79,6 +81,7 @@ const vendorUserSchema = new Schema<IVendorUser>(
     tokenVersion: { type: Number, default: 0 },
     fcmTokens: { type: [String], default: [], select: false },
     language: { type: String, enum: ['en', 'hi'], default: 'en' },
+    notificationPrefs: { type: Schema.Types.Mixed, default: {} },
     lastLoginAt: Date,
     lastLoginMethod: { type: String, enum: ['password', 'otp', 'email_link'] },
   },

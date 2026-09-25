@@ -97,6 +97,8 @@ export class VendorOsBookingController {
       from: q(req, 'from'),
       to: q(req, 'to'),
       mode: q(req, 'mode'),
+      bookingId: q(req, 'bookingId'),
+      search: q(req, 'search'),
       includeVoided: q(req, 'includeVoided') === 'true',
       skip,
       limit,
@@ -112,6 +114,10 @@ export class VendorOsBookingController {
     const bucket = (q(req, 'bucket') as any) || 'week';
     ApiResponse.success(res, 200, { data: await VendorPaymentService.dues(vendorIdOf(req), bucket) });
   }, 'payment dues');
+
+  static paymentSummary = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { data: await VendorPaymentService.summary(vendorIdOf(req)) });
+  }, 'payment summary');
 
   static voidPayment = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 200, { message: 'Payment voided', data: await VendorPaymentService.void(vendorIdOf(req), req.params.paymentId, req.body.reason, userIdOf(req)) });

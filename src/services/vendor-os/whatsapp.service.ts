@@ -42,6 +42,20 @@ interface SystemTemplate {
 
 const SYSTEM_TEMPLATES: SystemTemplate[] = [
   {
+    key: 'client_welcome',
+    name: 'Welcome a new client',
+    type: 'general',
+    language: 'hinglish',
+    body: 'Namaste {{clientName}} ji 🙏\n\n{{businessName}} se jodne ke liye dhanyavaad! Hamara kaam, packages aur reviews yahan dekhein: {{profileLink}}\n{{brochureLine}}\nKoi bhi sawaal ho toh isi number pe message karein.',
+  },
+  {
+    key: 'client_welcome',
+    name: 'Welcome a new client',
+    type: 'general',
+    language: 'en',
+    body: 'Hello {{clientName}},\n\nThank you for connecting with {{businessName}}! See our work, packages and reviews here: {{profileLink}}\n{{brochureLine}}\nMessage us on this number with any questions.',
+  },
+  {
     key: 'quote_share',
     name: 'Share quote',
     type: 'quote',
@@ -254,7 +268,9 @@ export class VendorWhatsAppService {
       return t;
     }
     if (!input.templateKey) return null;
-    const language = input.language || 'hinglish';
+    // Settings → default message language, unless the caller picked one.
+    const vendorLang = input.language ? null : await WeddingVendor.findById(vendorId).select('messageLanguage').lean();
+    const language = input.language || vendorLang?.messageLanguage || 'hinglish';
     const candidates = await MessageTemplate.find({ key: input.templateKey, vendorId: { $in: [null, vendorId] }, isActive: true });
     const pick = (lang: string) =>
       candidates.find((c) => c.vendorId && c.language === lang) || candidates.find((c) => !c.vendorId && c.language === lang);
@@ -265,7 +281,7 @@ export class VendorWhatsAppService {
 
   /** Every variable a template can use, resolved from whichever entities were passed. */
   static async buildContext(vendorId: Id, input: ComposeInput, language: string = 'hinglish') {
-    const vendor = await WeddingVendor.findById(vendorId).select('businessName slug phone whatsappNumber upiId').lean();
+    const vendor = await WeddingVendor.findById(vendorId).select('businessName slug phone whatsappNumber upiId brochureUrl').lean();
     if (!vendor) throw notFound('Vendor');
 
     const vars: Record<string, string> = {
@@ -275,6 +291,7 @@ export class VendorWhatsAppService {
       profileLink: `${VENDOR_OS_PUBLIC_URL}/vendors/${vendor.slug}`,
       upiLine: '',
       weddingDateLine: '',
+      brochureLine: vendor.brochureUrl ? `Brochure: ${vendor.brochureUrl}\n` : '',
     };
     const ids: { leadId?: Id; bookingId?: Id; quoteId?: Id; clientId?: Id } = {};
     let phone: string | undefined;

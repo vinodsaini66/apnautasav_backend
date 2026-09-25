@@ -265,21 +265,56 @@ export class VendorQuoteService {
     return { ...quote, publicUrl: quotePublicUrl(quote.publicToken) };
   }
 
-  static async list(vendorId: Id, q: { status?: string; leadId?: string; clientId?: string; search?: string; skip: number; limit: number }) {
-    const filter: any = { vendorId };
-    if (q.status) filter.status = { $in: q.status.split(',') };
-    if (q.leadId) filter.leadId = toObjectId(q.leadId, 'Lead');
-    if (q.clientId) filter.clientId = toObjectId(q.clientId, 'Client');
-    if (q.search) {
-      const rx = new RegExp(escapeRegex(q.search), 'i');
-      const clients = await VendorClient.find({ vendorId, $or: [{ name: rx }, { phone: rx }] }).select('_id').lean();
-      filter.$or = [{ quoteNumber: rx }, { title: rx }, { clientId: { $in: clients.map((c) => c._id) } }];
+  static async list(
+    vendorId: Id,
+    q: {
+      status?: string;
+      leadId?: string;
+      clientId?: string;
+      search?: string;
+      sort?: 'newest' | 'oldest' | 'eventDate' | 'validTill' | 'total';
+      skip: number;
+      limit: number;
     }
-    const [items, total] = await Promise.all([
-      VendorQuote.find(filter).select('-history -items').sort({ createdAt: -1 }).skip(q.skip).limit(q.limit).populate('clientId', 'name phone').lean(),
+  ) {
+    // Everything except status — `statusCounts` (the list's tab badges)
+    // reflects the current search/lead/client filters.
+    const base: any = { vendorId };
+    if (q.leadId) base.leadId = toObjectId(q.leadId, 'Lead');
+    if (q.clientId) base.clientId = toObjectId(q.clientId, 'Client');
+    if (q.search?.trim()) {
+      const term = q.search.trim();
+      const rx = new RegExp(escapeRegex(term), 'i');
+      // Phone only for numeric queries, so "Q-0001" doesn't match phones containing 0001.
+      const digits = term.replace(/\D/g, '');
+      const clientOr: any[] = [{ name: rx }];
+      if (/^[\d\s+()-]+$/.test(term) && digits.length >= 3) clientOr.push({ phone: new RegExp(escapeRegex(digits.slice(-10))) });
+      const clients = await VendorClient.find({ vendorId, $or: clientOr }).select('_id').lean();
+      base.$or = [{ quoteNumber: rx }, { title: rx }, { clientId: { $in: clients.map((c) => c._id) } }];
+    }
+    const filter = q.status ? { ...base, status: { $in: q.status.split(',') } } : base;
+
+    const SORTS: Record<string, Record<string, 1 | -1>> = {
+      newest: { createdAt: -1 },
+      oldest: { createdAt: 1 },
+      eventDate: { 'events.date': 1, createdAt: -1 },
+      validTill: { validTill: 1, createdAt: -1 },
+      total: { total: -1, createdAt: -1 },
+    };
+    const [items, total, counts] = await Promise.all([
+      VendorQuote.find(filter)
+        .select('-history -items -terms -notes')
+        .sort(SORTS[q.sort || 'newest'])
+        .skip(q.skip)
+        .limit(q.limit)
+        .populate('clientId', 'name phone')
+        .lean(),
       VendorQuote.countDocuments(filter),
+      VendorQuote.aggregate([{ $match: base }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
     ]);
-    return { items, total };
+    const statusCounts: Record<string, number> = { draft: 0, sent: 0, viewed: 0, accepted: 0, declined: 0, expired: 0 };
+    for (const c of counts) statusCounts[c._id] = c.count;
+    return { items, total, statusCounts };
   }
 
   /**

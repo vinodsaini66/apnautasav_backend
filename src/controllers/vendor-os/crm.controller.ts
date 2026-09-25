@@ -65,17 +65,29 @@ export class VendorOsCrmController {
   // ---- clients --------------------------------------------------------
   static listClients = handle(async (req: Request, res: Response) => {
     const { page, limit, skip } = parsePagination(req.query);
-    const { items, total } = await VendorClientService.list(vendorIdOf(req), { search: q(req, 'search'), skip, limit });
-    ApiResponse.paginated(res, items, page, limit, total);
+    const { items, total, tagCounts } = await VendorClientService.list(
+      vendorIdOf(req),
+      { search: q(req, 'search'), tag: q(req, 'tag'), sort: q(req, 'sort') as any, skip, limit },
+      financials(req)
+    );
+    res.status(200).json({
+      status: 'success',
+      data: items,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total, tagCounts },
+    });
   }, 'list clients');
 
   static createClient = handle(async (req: Request, res: Response) => {
-    ApiResponse.success(res, 201, { message: 'Client added', data: await VendorClientService.create(vendorIdOf(req), req.body) });
+    ApiResponse.success(res, 201, { message: 'Client added', data: await VendorClientService.create(vendorIdOf(req), req.body, userIdOf(req)) });
   }, 'create client');
 
   static getClient = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 200, { data: await VendorClientService.get(vendorIdOf(req), req.params.clientId, financials(req)) });
   }, 'get client');
+
+  static addClientNote = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 201, { message: 'Note added', data: await VendorClientService.addNote(vendorIdOf(req), req.params.clientId, req.body, userIdOf(req)) });
+  }, 'add client note');
 
   static updateClient = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 200, { message: 'Client updated', data: await VendorClientService.update(vendorIdOf(req), req.params.clientId, req.body) });

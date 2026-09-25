@@ -87,6 +87,24 @@ export type MessageTemplateType = (typeof MESSAGE_TEMPLATE_TYPES)[number];
 
 export const MESSAGE_LANGUAGES = ['en', 'hi', 'hinglish'] as const;
 
+// Settings → Notifications: per-user switches, keyed by category. A
+// notification type not listed here (profile approved / rejected) always goes out.
+export const NOTIFICATION_CATEGORIES = ['leads', 'followUps', 'quotes', 'payments', 'bookings', 'crew'] as const;
+export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+export const NOTIFICATION_CATEGORY_OF: Record<string, NotificationCategory> = {
+  new_lead: 'leads',
+  follow_up_due: 'followUps',
+  quote_viewed: 'quotes',
+  quote_accepted: 'quotes',
+  quote_declined: 'quotes',
+  payment_due: 'payments',
+  payment_overdue: 'payments',
+  hold_expired: 'bookings',
+  crew_assigned: 'crew',
+  crew_declined: 'crew',
+  crew_needs_reassign: 'crew',
+};
+
 export const FUNCTION_TYPES = [
   'roka',
   'engagement',

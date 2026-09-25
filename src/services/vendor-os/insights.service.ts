@@ -349,7 +349,7 @@ export class VendorInsightsService {
       }
       case 'clients': {
         const clients = await VendorClient.find({ vendorId }).sort({ name: 1 }).lean();
-        rows = clients.map((c) => ({ name: c.name, phone: c.phone, email: c.email, city: c.city, notes: c.notes, createdAt: d(c.createdAt) }));
+        rows = clients.map((c) => ({ name: c.name, contactPerson: c.contactPerson, phone: c.phone, email: c.email, city: c.city, address: c.address, tags: (c.tags || []).join(', '), notes: c.notes, createdAt: d(c.createdAt) }));
         columns = Object.keys(rows[0] || { name: 1 }).map((k) => ({ key: k, label: k }));
         break;
       }
