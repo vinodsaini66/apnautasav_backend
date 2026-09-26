@@ -43,6 +43,43 @@ router.use(vendorAuth, requireVendor);
 router.get('/profile', office, Profile.getProfile);
 router.patch('/profile', managers, validate(v.updateProfileSchema), Profile.updateProfile);
 router.get('/profile/completeness', office, Profile.completeness);
+/**
+ * @swagger
+ * /vendor-os/uploads/image:
+ *   post:
+ *     summary: "Upload an image (logo, cover, portfolio) to S3"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } }
+ *     responses:
+ *       201: { description: "{ url }" }
+ *       500: { description: AWS S3 not configured }
+ * /vendor-os/uploads/document:
+ *   post:
+ *     summary: "Upload a document (PDF / image: brochure, licence, KYC) to S3; returns { url, fileName }"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/uploads/video:
+ *   post:
+ *     summary: "Upload a video to S3; returns { url } (201)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } }
+ *     responses:
+ *       200: { description: OK }
+ */
 router.post('/uploads/image', office, imageUpload.single('file'), Profile.uploadImage);
 router.post('/uploads/document', office, documentUpload.single('file'), Profile.uploadDocument);
 router.post('/uploads/video', office, videoUpload.single('file'), Profile.uploadVideo);
@@ -58,11 +95,142 @@ router.post('/profile/submit', managers, Profile.submit);
 router.post('/profile/unpublish', managers, Profile.unpublish);
 router.get('/plan', managers, Profile.plan);
 
+/**
+ * @swagger
+ * /vendor-os/packages:
+ *   get:
+ *     summary: "Packages and add-ons (sorted)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Create a package or add-on (owner / manager; plan limit applies)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [name, price], properties: { kind: { type: string, enum: [package, addon] }, name: { type: string }, description: { type: string }, includes: { type: array, items: { type: string } }, excludes: { type: array, items: { type: string } }, price: { type: number }, pricingBasis: { type: string }, unit: { type: string }, duration: { type: string }, taxPercent: { type: number }, isPopular: { type: boolean }, addonIds: { type: array, items: { type: string } }, sortOrder: { type: integer }, isActive: { type: boolean } } }
+ *     responses:
+ *       201: { description: Created }
+ * /vendor-os/packages/{packageId}:
+ *   patch:
+ *     summary: "Update a package (same fields, all optional)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: packageId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { kind: { type: string, enum: [package, addon] }, name: { type: string }, description: { type: string }, includes: { type: array, items: { type: string } }, excludes: { type: array, items: { type: string } }, price: { type: number }, pricingBasis: { type: string }, unit: { type: string }, duration: { type: string }, taxPercent: { type: number }, isPopular: { type: boolean }, addonIds: { type: array, items: { type: string } }, sortOrder: { type: integer }, isActive: { type: boolean } } }
+ *     responses:
+ *       200: { description: OK }
+ *   delete:
+ *     summary: "Delete a package (owner / manager)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: packageId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ */
 router.get('/packages', office, Profile.listPackages);
 router.post('/packages', managers, validate(v.createPackageSchema), Profile.createPackage);
 router.patch('/packages/:packageId', managers, validate(v.updatePackageSchema), Profile.updatePackage);
 router.delete('/packages/:packageId', managers, Profile.deletePackage);
 
+/**
+ * @swagger
+ * /vendor-os/portfolio/albums:
+ *   get:
+ *     summary: "Portfolio albums with media counts"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Create an album"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [name], properties: { name: { type: string }, description: { type: string }, coverImage: { type: string }, functionTag: { type: string }, themeTags: { type: array, items: { type: string } }, venue: { type: string }, city: { type: string }, season: { type: string }, sortOrder: { type: integer } } }
+ *     responses:
+ *       201: { description: Created }
+ * /vendor-os/portfolio/albums/{albumId}:
+ *   get:
+ *     summary: "Album with its media"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: albumId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ *   patch:
+ *     summary: "Update an album"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: albumId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { name: { type: string }, description: { type: string }, coverImage: { type: string }, functionTag: { type: string }, themeTags: { type: array, items: { type: string } }, venue: { type: string }, city: { type: string }, season: { type: string }, sortOrder: { type: integer } } }
+ *     responses:
+ *       200: { description: OK }
+ *   delete:
+ *     summary: "Delete an album (owner / manager)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: albumId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/portfolio/media:
+ *   get:
+ *     summary: "Portfolio media"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: albumId, schema: { type: string } }
+ *       - { in: query, name: type, schema: { type: string, enum: [image, video, embed] } }
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Add up to 50 media items (URLs from /uploads)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [items], properties: { items: { type: array, items: { type: object, required: [type, url], properties: { type: { type: string, enum: [image, video, embed] }, url: { type: string }, thumbnailUrl: { type: string }, title: { type: string }, description: { type: string }, albumId: { type: string }, sortOrder: { type: integer }, isFeatured: { type: boolean } } } } } }
+ *     responses:
+ *       201: { description: Added }
+ * /vendor-os/portfolio/media/{mediaId}:
+ *   patch:
+ *     summary: "Update a media item (not its type or url)"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: mediaId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { thumbnailUrl: { type: string }, title: { type: string }, description: { type: string }, albumId: { type: string }, sortOrder: { type: integer }, isFeatured: { type: boolean } } }
+ *     responses:
+ *       200: { description: OK }
+ *   delete:
+ *     summary: "Delete a media item"
+ *     tags: [Vendor OS Profile & Team]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: mediaId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ */
 router.get('/portfolio/albums', office, Profile.listAlbums);
 router.post('/portfolio/albums', office, validate(v.createAlbumSchema), Profile.createAlbum);
 router.get('/portfolio/albums/:albumId', office, Profile.getAlbum);
@@ -74,6 +242,36 @@ router.patch('/portfolio/media/:mediaId', office, validate(v.updateMediaSchema),
 router.delete('/portfolio/media/:mediaId', office, Profile.deleteMedia);
 
 // Notifications stay open while waiting for approval ("Your profile is live").
+/**
+ * @swagger
+ * /vendor-os/notifications:
+ *   get:
+ *     summary: "In-app notifications for the signed-in user (meta.unread)"
+ *     tags: [Vendor OS Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer } }
+ *       - { in: query, name: limit, schema: { type: integer } }
+ *       - { in: query, name: unread, schema: { type: boolean } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/notifications/read-all:
+ *   post:
+ *     summary: "Mark all notifications read"
+ *     tags: [Vendor OS Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/notifications/{notificationId}/read:
+ *   post:
+ *     summary: "Mark one notification read"
+ *     tags: [Vendor OS Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: notificationId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ */
 router.get('/notifications', everyone, Workspace.listNotifications);
 router.post('/notifications/read-all', everyone, Workspace.markAllNotificationsRead);
 router.post('/notifications/:notificationId/read', everyone, Workspace.markNotificationRead);
@@ -85,6 +283,102 @@ router.use(requireVerifiedAccount);
 // ---------------------------------------------------------------------------
 // M2 — Resources & calendar (conflict engine)
 // ---------------------------------------------------------------------------
+/**
+ * @swagger
+ * tags:
+ *   - name: Vendor OS Calendar
+ *     description: Bookable resources (crews, halls, slots), the calendar and the conflict engine. Double-booking is refused by a unique index on ResourceBlock.
+ * /vendor-os/resources:
+ *   get:
+ *     summary: "Resources (crews, spaces, capacity, artist slots…)"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Create a resource (owner / manager; plan limit applies)"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [name], properties: { type: { type: string, enum: [space_slot, crew, capacity, artist_slot, inventory, production_date] }, name: { type: string, example: Crew A }, description: { type: string }, capacity: { type: integer }, memberId: { type: string, nullable: true }, color: { type: string }, sortOrder: { type: integer }, isActive: { type: boolean } } }
+ *     responses:
+ *       201: { description: Created }
+ * /vendor-os/resources/{resourceId}:
+ *   patch:
+ *     summary: "Update a resource"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: resourceId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { type: { type: string, enum: [space_slot, crew, capacity, artist_slot, inventory, production_date] }, name: { type: string, example: Crew A }, description: { type: string }, capacity: { type: integer }, memberId: { type: string, nullable: true }, color: { type: string }, sortOrder: { type: integer }, isActive: { type: boolean } } }
+ *     responses:
+ *       200: { description: OK }
+ *   delete:
+ *     summary: "Delete a resource (refused while it has future blocks)"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: resourceId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/calendar:
+ *   get:
+ *     summary: "Calendar blocks and bookings between from and to (crew see their own work)"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: from, schema: { type: string, example: '2026-11-01' } }
+ *       - { in: query, name: to, schema: { type: string, example: '2026-11-30' } }
+ *       - { in: query, name: resourceId, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/calendar/availability:
+ *   get:
+ *     summary: "Per-resource availability on the given dates"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: dates, required: true, schema: { type: string, example: '2026-11-13,2026-11-14' } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/calendar/check:
+ *   post:
+ *     summary: "Dry-run the conflict engine for a set of events"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [events], properties: { events: { type: array, items: { type: object, required: [functionType, date], properties: { _id: { type: string }, functionType: { type: string, example: sangeet }, date: { type: string, example: '2026-11-13' }, slot: { type: string, enum: [morning, evening, full_day] }, startTime: { type: string, example: '19:00' }, endTime: { type: string }, venue: { type: string }, city: { type: string }, guestCount: { type: integer }, notes: { type: string }, resourceAllocations: { type: array, items: { type: object, required: [resourceId], properties: { resourceId: { type: string }, units: { type: integer } } } } } } }, excludeBookingId: { type: string } } }
+ *     responses:
+ *       200: { description: "Conflicts per event / resource" }
+ * /vendor-os/calendar/blocks:
+ *   post:
+ *     summary: "Block dates manually (dates[] or from/to), optionally soft"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { resourceIds: { type: array, items: { type: string } }, dates: { type: array, items: { type: string } }, from: { type: string }, to: { type: string }, slot: { type: string, enum: [morning, evening, full_day], default: full_day }, reason: { type: string }, soft: { type: boolean } } }
+ *     responses:
+ *       201: { description: Blocked }
+ *       409: { description: Conflicts with an existing block }
+ * /vendor-os/calendar/blocks/{blockId}:
+ *   delete:
+ *     summary: "Remove a manual block"
+ *     tags: [Vendor OS Calendar]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: blockId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ */
 router.get('/resources', everyone, Calendar.listResources);
 router.post('/resources', managers, validate(v.createResourceSchema), Calendar.createResource);
 router.patch('/resources/:resourceId', managers, validate(v.updateResourceSchema), Calendar.updateResource);
@@ -205,6 +499,85 @@ router.delete('/calendar/blocks/:blockId', office, Calendar.deleteBlock);
  *       200: { description: Voided payment }
  */
 // ---------------------------------------------------------------------------
+/**
+ * @swagger
+ * tags:
+ *   - name: Vendor OS Bookings
+ *     description: Bookings (hold → tentative → confirmed → completed / cancelled). Money fields are left out for staff.
+ * /vendor-os/bookings:
+ *   get:
+ *     summary: "Bookings list with meta.statusCounts"
+ *     tags: [Vendor OS Bookings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer } }
+ *       - { in: query, name: limit, schema: { type: integer } }
+ *       - { in: query, name: search, schema: { type: string } }
+ *       - { in: query, name: status, schema: { type: string, example: 'tentative,confirmed' } }
+ *       - { in: query, name: from, schema: { type: string } }
+ *       - { in: query, name: to, schema: { type: string } }
+ *       - { in: query, name: clientId, schema: { type: string } }
+ *       - { in: query, name: when, schema: { type: string, enum: [upcoming, past] } }
+ *       - { in: query, name: balance, schema: { type: string, enum: [due, cleared] } }
+ *       - { in: query, name: sort, schema: { type: string, enum: [eventDate, eventDateDesc, newest, oldest] } }
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Create a booking (auto-allocates free resources; confirm needs a resource per event)"
+ *     tags: [Vendor OS Bookings]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [events], properties: { leadId: { type: string }, clientId: { type: string }, client: { type: object, required: [name, phone], properties: { name: { type: string }, phone: { type: string }, email: { type: string } } }, title: { type: string }, status: { type: string, enum: [hold, tentative, confirmed] }, holdExpiresAt: { type: string, format: date-time }, events: { type: array, items: { type: object, required: [functionType, date], properties: { _id: { type: string }, functionType: { type: string, example: sangeet }, date: { type: string, example: '2026-11-13' }, slot: { type: string, enum: [morning, evening, full_day] }, startTime: { type: string, example: '19:00' }, endTime: { type: string }, venue: { type: string }, city: { type: string }, guestCount: { type: integer }, notes: { type: string }, resourceAllocations: { type: array, items: { type: object, required: [resourceId], properties: { resourceId: { type: string }, units: { type: integer } } } } } } }, totalAmount: { type: number }, paymentSchedule: { type: array, items: { type: object, required: [label, amount], properties: { _id: { type: string }, label: { type: string }, amount: { type: number }, dueDate: { type: string, example: '2026-10-01' } } } }, autoReminders: { type: boolean }, autoAllocate: { type: boolean }, notes: { type: string } } }
+ *     responses:
+ *       201: { description: Created }
+ *       409: { description: "BOOKING_CONFLICT with details" }
+ * /vendor-os/bookings/{bookingId}:
+ *   get:
+ *     summary: "Booking detail with payments, activity and per-function crew summary"
+ *     tags: [Vendor OS Bookings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: bookingId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ *   patch:
+ *     summary: "Update a booking (completed / cancelled: notes only)"
+ *     tags: [Vendor OS Bookings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: bookingId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { title: { type: string }, notes: { type: string }, events: { type: array, items: { type: object, required: [functionType, date], properties: { _id: { type: string }, functionType: { type: string, example: sangeet }, date: { type: string, example: '2026-11-13' }, slot: { type: string, enum: [morning, evening, full_day] }, startTime: { type: string, example: '19:00' }, endTime: { type: string }, venue: { type: string }, city: { type: string }, guestCount: { type: integer }, notes: { type: string }, resourceAllocations: { type: array, items: { type: object, required: [resourceId], properties: { resourceId: { type: string }, units: { type: integer } } } } } } }, totalAmount: { type: number }, paymentSchedule: { type: array, items: { type: object, required: [label, amount], properties: { _id: { type: string }, label: { type: string }, amount: { type: number }, dueDate: { type: string, example: '2026-10-01' } } } }, autoReminders: { type: boolean }, holdExpiresAt: { type: string, format: date-time, nullable: true } } }
+ *     responses:
+ *       200: { description: Updated }
+ *       409: { description: BOOKING_CONFLICT }
+ * /vendor-os/bookings/{bookingId}/status:
+ *   post:
+ *     summary: "Move a booking to another status (see allowed transitions)"
+ *     tags: [Vendor OS Bookings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: bookingId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [status], properties: { status: { type: string, enum: [hold, tentative, confirmed, completed, cancelled] }, reason: { type: string }, holdExpiresAt: { type: string, format: date-time } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/bookings/{bookingId}/payments:
+ *   get:
+ *     summary: "Payments recorded on a booking (owner / manager)"
+ *     tags: [Vendor OS Bookings]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: bookingId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ */
 router.get('/bookings', office, validate(v.listBookingsSchema), Booking.list);
 router.post('/bookings', office, validate(v.createBookingSchema), Booking.create);
 router.get('/bookings/:bookingId', office, Booking.get);
@@ -224,6 +597,170 @@ router.post('/payments/:paymentId/void', managers, validate(v.voidPaymentSchema)
 // ---------------------------------------------------------------------------
 // M4 — Quotes & quote templates
 // ---------------------------------------------------------------------------
+/**
+ * @swagger
+ * tags:
+ *   - name: Vendor OS Quotes
+ *     description: Quotes with versions (editing a sent quote creates v(n+1)), quote templates, PDF and the public accept link.
+ * /vendor-os/quote-templates:
+ *   get:
+ *     summary: "Quote templates"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Create a quote template"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [name], properties: { name: { type: string }, title: { type: string }, items: { type: array, items: { type: object, required: [name], properties: { name: { type: string }, description: { type: string }, qty: { type: number }, unit: { type: string }, rate: { type: number }, taxPercent: { type: number }, packageId: { type: string } } } }, gstEnabled: { type: boolean }, validityDays: { type: integer }, terms: { type: string }, deliverables: { type: array, items: { type: string } }, paymentSchedule: { type: array, items: { type: object, required: [label, percent], properties: { label: { type: string }, percent: { type: number }, dueOffsetDays: { type: integer } } } } } }
+ *     responses:
+ *       201: { description: Created }
+ * /vendor-os/quote-templates/{templateId}:
+ *   patch:
+ *     summary: "Update a quote template"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: templateId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { name: { type: string }, title: { type: string }, items: { type: array, items: { type: object, properties: { name: { type: string }, description: { type: string }, qty: { type: number }, unit: { type: string }, rate: { type: number }, taxPercent: { type: number }, packageId: { type: string } } } }, gstEnabled: { type: boolean }, validityDays: { type: integer }, terms: { type: string }, deliverables: { type: array, items: { type: string } }, paymentSchedule: { type: array, items: { type: object, required: [label, percent], properties: { label: { type: string }, percent: { type: number }, dueOffsetDays: { type: integer } } } } } }
+ *     responses:
+ *       200: { description: OK }
+ *   delete:
+ *     summary: "Delete a quote template"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: templateId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/quotes:
+ *   get:
+ *     summary: "Quotes list with meta.statusCounts (no items / history)"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer } }
+ *       - { in: query, name: limit, schema: { type: integer } }
+ *       - { in: query, name: search, schema: { type: string } }
+ *       - { in: query, name: status, schema: { type: string, example: 'sent,viewed' } }
+ *       - { in: query, name: leadId, schema: { type: string } }
+ *       - { in: query, name: clientId, schema: { type: string } }
+ *       - { in: query, name: sort, schema: { type: string, enum: [newest, oldest, eventDate, validTill, total] } }
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Create a draft quote (from a lead, client, template and / or packages)"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { leadId: { type: string }, clientId: { type: string }, client: { type: object, required: [name, phone], properties: { name: { type: string }, phone: { type: string }, email: { type: string } } }, templateId: { type: string }, packageIds: { type: array, items: { type: string } }, title: { type: string }, items: { type: array, items: { type: object, required: [name], properties: { name: { type: string }, description: { type: string }, qty: { type: number }, unit: { type: string }, rate: { type: number }, taxPercent: { type: number }, packageId: { type: string } } } }, discount: { type: object, properties: { type: { type: string, enum: [flat, percent] }, value: { type: number } } }, gstEnabled: { type: boolean }, validTill: { type: string, example: '2026-10-05' }, terms: { type: string }, deliverables: { type: array, items: { type: string } }, notes: { type: string }, paymentSchedule: { type: array, items: { type: object, required: [label], properties: { label: { type: string }, percent: { type: number }, amount: { type: number }, dueDate: { type: string } } } }, events: { type: array, items: { type: object, required: [functionType, date], properties: { functionType: { type: string }, date: { type: string }, slot: { type: string, enum: [morning, evening, full_day] }, venue: { type: string }, guestCount: { type: integer } } } } } }
+ *     responses:
+ *       201: { description: Created }
+ * /vendor-os/quotes/{quoteId}:
+ *   get:
+ *     summary: "Quote detail with versions"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ *   patch:
+ *     summary: "Edit a quote (a non-draft quote becomes the next version)"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { title: { type: string }, items: { type: array, items: { type: object, required: [name], properties: { name: { type: string }, description: { type: string }, qty: { type: number }, unit: { type: string }, rate: { type: number }, taxPercent: { type: number }, packageId: { type: string } } } }, discount: { type: object, properties: { type: { type: string, enum: [flat, percent] }, value: { type: number } } }, gstEnabled: { type: boolean }, validTill: { type: string, example: '2026-10-05' }, terms: { type: string }, deliverables: { type: array, items: { type: string } }, notes: { type: string }, paymentSchedule: { type: array, items: { type: object, required: [label], properties: { label: { type: string }, percent: { type: number }, amount: { type: number }, dueDate: { type: string } } } }, events: { type: array, items: { type: object, required: [functionType, date], properties: { functionType: { type: string }, date: { type: string }, slot: { type: string, enum: [morning, evening, full_day] }, venue: { type: string }, guestCount: { type: integer } } } } } }
+ *     responses:
+ *       200: { description: OK }
+ *   delete:
+ *     summary: "Delete a draft quote"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/quotes/{quoteId}/send:
+ *   post:
+ *     summary: "Mark sent and return the quote_share WhatsApp link"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { language: { type: string, enum: [hinglish, en, hi] } } }
+ *     responses:
+ *       200: { description: "{ quote, publicUrl, pdfUrl, whatsapp }" }
+ * /vendor-os/quotes/{quoteId}/duplicate:
+ *   post:
+ *     summary: "Copy a quote into a new draft"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     responses:
+ *       201: { description: Created }
+ * /vendor-os/quotes/{quoteId}/status:
+ *   post:
+ *     summary: "Mark accepted (creates a tentative booking) or declined"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [status], properties: { status: { type: string, enum: [accepted, declined] }, reason: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/quotes/{quoteId}/save-as-template:
+ *   post:
+ *     summary: "Save a quote as a quote template"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [name], properties: { name: { type: string } } }
+ *     responses:
+ *       201: { description: Saved }
+ * /vendor-os/quotes/{quoteId}/pdf:
+ *   get:
+ *     summary: "Quote PDF"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }
+ * /vendor-os/quotes/{quoteId}/link:
+ *   get:
+ *     summary: "Public client link for the quote"
+ *     tags: [Vendor OS Quotes]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: quoteId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: "{ publicUrl, token }" }
+ */
 router.get('/quote-templates', office, Quote.listTemplates);
 router.post('/quote-templates', office, validate(v.createQuoteTemplateSchema), Quote.createTemplate);
 router.patch('/quote-templates/:templateId', office, validate(v.updateQuoteTemplateSchema), Quote.updateTemplate);
@@ -244,6 +781,118 @@ router.get('/quotes/:quoteId/link', office, Quote.link);
 // ---------------------------------------------------------------------------
 // M5 — Leads & clients
 // ---------------------------------------------------------------------------
+/**
+ * @swagger
+ * tags:
+ *   - name: Vendor OS Leads
+ *     description: Lead inbox and pipeline (new → contacted → quoted → booked / lost), follow-ups and timeline.
+ * /vendor-os/leads:
+ *   get:
+ *     summary: "Leads with meta.pipeline counts and overdue follow-ups"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer } }
+ *       - { in: query, name: limit, schema: { type: integer } }
+ *       - { in: query, name: search, schema: { type: string } }
+ *       - { in: query, name: status, schema: { type: string, example: 'new,contacted' } }
+ *       - { in: query, name: source, schema: { type: string } }
+ *       - { in: query, name: followUp, schema: { type: string, enum: [overdue, today, upcoming] } }
+ *       - { in: query, name: sort, schema: { type: string, enum: [newest, oldest, wedding, followUp, activity] } }
+ *       - { in: query, name: weddingFrom, schema: { type: string } }
+ *       - { in: query, name: weddingTo, schema: { type: string } }
+ *       - { in: query, name: assignedTo, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ *   post:
+ *     summary: "Create a lead (409 DUPLICATE_LEAD for an open lead with the same phone unless force)"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [name, phone, source], properties: { name: { type: string }, phone: { type: string }, email: { type: string }, source: { type: string, enum: [apnautsav, whatsapp, call, instagram, wedmegood, referral, walk_in, website, other] }, eventType: { type: string }, weddingDates: { type: array, items: { type: string, example: '2026-11-14' } }, functions: { type: array, items: { type: string } }, city: { type: string }, venue: { type: string }, budgetBand: { type: string, enum: [under_1l, 1l_3l, 3l_5l, 5l_10l, 10l_25l, above_25l] }, budgetAmount: { type: number }, guestCount: { type: integer }, message: { type: string }, notes: { type: string }, assignedTo: { type: string }, nextFollowUpAt: { type: string, format: date-time }, force: { type: boolean } } }
+ *     responses:
+ *       201: { description: Created }
+ *       409: { description: DUPLICATE_LEAD }
+ * /vendor-os/leads/{leadId}:
+ *   get:
+ *     summary: "Lead detail with timeline and latest quote"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: leadId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ *   patch:
+ *     summary: "Update a lead (not its phone)"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: leadId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { name: { type: string }, email: { type: string }, source: { type: string, enum: [apnautsav, whatsapp, call, instagram, wedmegood, referral, walk_in, website, other] }, eventType: { type: string }, weddingDates: { type: array, items: { type: string, example: '2026-11-14' } }, functions: { type: array, items: { type: string } }, city: { type: string }, venue: { type: string }, budgetBand: { type: string, enum: [under_1l, 1l_3l, 3l_5l, 5l_10l, 10l_25l, above_25l] }, budgetAmount: { type: number }, guestCount: { type: integer }, message: { type: string }, notes: { type: string }, assignedTo: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ *   delete:
+ *     summary: "Delete a lead (owner / manager)"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: leadId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/leads/{leadId}/status:
+ *   post:
+ *     summary: "Change the lead status (lost needs a reason)"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: leadId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [status], properties: { status: { type: string, enum: [new, contacted, quoted, booked, lost] }, lostReason: { type: string, enum: [price, date_unavailable, chose_other, no_response, other] }, lostNote: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/leads/{leadId}/notes:
+ *   post:
+ *     summary: "Add a note / call / meeting to the timeline"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: leadId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [text], properties: { type: { type: string, enum: [note, call, meeting], default: note }, text: { type: string } } }
+ *     responses:
+ *       201: { description: Added }
+ * /vendor-os/leads/{leadId}/follow-up:
+ *   post:
+ *     summary: "Set or clear (at null) the next follow-up"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: leadId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [at], properties: { at: { type: string, format: date-time, nullable: true }, note: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/leads/{leadId}/availability:
+ *   get:
+ *     summary: "Resource availability on the lead’s wedding dates"
+ *     tags: [Vendor OS Leads]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: leadId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ */
 router.get('/leads', office, validate(v.listLeadsSchema), Crm.listLeads);
 router.post('/leads', office, validate(v.createLeadSchema), Crm.createLead);
 router.get('/leads/:leadId', office, Crm.getLead);
@@ -340,8 +989,122 @@ router.post('/clients/:clientId/notes', office, validate(v.clientNoteSchema), Cr
 // ---------------------------------------------------------------------------
 // M6 — WhatsApp (deep links) & message templates
 // ---------------------------------------------------------------------------
+/**
+ * @swagger
+ * tags:
+ *   - name: Vendor OS WhatsApp
+ *     description: >
+ *       WhatsApp deep links (wa.me) and message templates. System templates (vendorId null) are seeded per key + language;
+ *       editing one saves the vendor's own copy under the same key, deleting that copy reverts to the default.
+ * /vendor-os/whatsapp/compose:
+ *   post:
+ *     summary: Render a template (or free text) for a lead / booking / quote / payment / client, log it and return a wa.me link
+ *     tags: [Vendor OS WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               templateId: { type: string }
+ *               templateKey: { type: string, example: payment_reminder }
+ *               language: { type: string, enum: [hinglish, en, hi], description: "Defaults to Settings → message language" }
+ *               body: { type: string, description: "Overrides the template text (the template key is still logged)" }
+ *               leadId: { type: string }
+ *               bookingId: { type: string }
+ *               quoteId: { type: string }
+ *               paymentId: { type: string }
+ *               milestoneId: { type: string }
+ *               clientId: { type: string }
+ *               phone: { type: string }
+ *               variables: { type: object, additionalProperties: { type: string } }
+ *               log: { type: boolean, default: true }
+ *     responses:
+ *       200: { description: "{ phone, message, waLink, templateKey }" }
+ * /vendor-os/message-templates:
+ *   get:
+ *     summary: Templates visible to the vendor (own copies replace defaults per key + language), with origin, variables, sentCount, lastSentAt
+ *     tags: [Vendor OS WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: type, schema: { type: string, enum: [quote, payment_reminder, schedule, receipt, thank_you, follow_up, call_sheet, run_sheet, general] } }
+ *     responses:
+ *       200: { description: "Templates; origin is system | edited | custom" }
+ *   post:
+ *     summary: Create a template (owner / manager). A default's key (e.g. quote_share + hi) adds a language version of that default.
+ *     tags: [Vendor OS WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, type, body]
+ *             properties:
+ *               key: { type: string, example: quote_follow_up }
+ *               name: { type: string, example: "Quote follow-up" }
+ *               type: { type: string, enum: [quote, payment_reminder, schedule, receipt, thank_you, follow_up, call_sheet, run_sheet, general] }
+ *               language: { type: string, enum: [hinglish, en, hi] }
+ *               body: { type: string, example: "Namaste {{clientName}} ji, …" }
+ *     responses:
+ *       201: { description: Saved }
+ * /vendor-os/message-templates/variables:
+ *   get:
+ *     summary: Every {{variable}} a template can use — key, label, group (what must be attached) and a sample value
+ *     tags: [Vendor OS WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Variables }
+ * /vendor-os/message-templates/preview:
+ *   post:
+ *     summary: Render a saved or unsaved template without logging. sample=true fills gaps with samples and links to your own WhatsApp (test message).
+ *     tags: [Vendor OS WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               templateId: { type: string }
+ *               body: { type: string }
+ *               language: { type: string, enum: [hinglish, en, hi] }
+ *               leadId: { type: string }
+ *               bookingId: { type: string }
+ *               quoteId: { type: string }
+ *               paymentId: { type: string }
+ *               clientId: { type: string }
+ *               phone: { type: string }
+ *               sample: { type: boolean }
+ *     responses:
+ *       200: { description: "{ message, phone, waLink, variables, unknown, missing }" }
+ * /vendor-os/message-templates/{templateId}:
+ *   patch:
+ *     summary: Edit a template (owner / manager). Editing a default saves your own copy.
+ *     tags: [Vendor OS WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: templateId, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { name: { type: string }, type: { type: string, description: "Own templates only" }, body: { type: string }, isActive: { type: boolean } } }
+ *     responses:
+ *       200: { description: Saved }
+ *   delete:
+ *     summary: Delete your own template, or reset an edited default back to the ApnaUtsav version
+ *     tags: [Vendor OS WhatsApp]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: templateId, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Deleted }
+ */
 router.post('/whatsapp/compose', office, validate(v.composeSchema), Workspace.compose);
 router.get('/message-templates', office, Workspace.listMessageTemplates);
+router.get('/message-templates/variables', office, Workspace.messageVariables);
+router.post('/message-templates/preview', office, validate(v.previewMessageTemplateSchema), Workspace.previewMessageTemplate);
 router.post('/message-templates', managers, validate(v.createMessageTemplateSchema), Workspace.createMessageTemplate);
 router.patch('/message-templates/:templateId', managers, validate(v.updateMessageTemplateSchema), Workspace.updateMessageTemplate);
 router.delete('/message-templates/:templateId', managers, Workspace.deleteMessageTemplate);
@@ -349,6 +1112,38 @@ router.delete('/message-templates/:templateId', managers, Workspace.deleteMessag
 // ---------------------------------------------------------------------------
 // M7 — Dashboard, reports, export, notifications, team
 // ---------------------------------------------------------------------------
+/**
+ * @swagger
+ * tags:
+ *   - name: Vendor OS Dashboard
+ *     description: Dashboard, reports, CSV export and in-app notifications.
+ * /vendor-os/dashboard:
+ *   get:
+ *     summary: "Dashboard: today, leads, follow-ups, upcoming events; money block for owner / manager only"
+ *     tags: [Vendor OS Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/reports/source-conversion:
+ *   get:
+ *     summary: "Leads, bookings and value by lead source"
+ *     tags: [Vendor OS Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: from, schema: { type: string } }
+ *       - { in: query, name: to, schema: { type: string } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/export/{entity}:
+ *   get:
+ *     summary: "CSV export (owner / manager)"
+ *     tags: [Vendor OS Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: path, name: entity, required: true, schema: { type: string, enum: [leads, bookings, payments, clients, quotes] } }
+ *     responses:
+ *       200: { description: CSV, content: { text/csv: { schema: { type: string } } } }
+ */
 router.get('/dashboard', office, Workspace.dashboard);
 router.get('/reports/source-conversion', office, Workspace.sourceConversion);
 router.get('/export/:entity', managers, Workspace.exportCsv);

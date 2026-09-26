@@ -47,12 +47,20 @@ export class VendorOsWorkspaceController {
 
   // ---- WhatsApp -------------------------------------------------------
   static compose = handle(async (req: Request, res: Response) => {
-    ApiResponse.success(res, 200, { data: await VendorWhatsAppService.compose(vendorIdOf(req), userIdOf(req), req.body) });
+    ApiResponse.success(res, 200, { data: await VendorWhatsAppService.compose(vendorIdOf(req), userIdOf(req), req.body, financials(req)) });
   }, 'whatsapp compose');
 
   static listMessageTemplates = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 200, { data: await VendorWhatsAppService.listTemplates(vendorIdOf(req), q(req, 'type')) });
   }, 'list message templates');
+
+  static messageVariables = handle(async (_req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { data: VendorWhatsAppService.variables() });
+  }, 'message variables');
+
+  static previewMessageTemplate = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { data: await VendorWhatsAppService.preview(vendorIdOf(req), userIdOf(req), req.body, financials(req)) });
+  }, 'preview message template');
 
   static createMessageTemplate = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 201, { message: 'Template saved', data: await VendorWhatsAppService.createTemplate(vendorIdOf(req), req.body) });

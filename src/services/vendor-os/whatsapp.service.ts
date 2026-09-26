@@ -9,11 +9,14 @@ import { VendorClient } from '../../models/vendor-os/vendor-client.model';
 import { VendorNotifyService } from './vendor-notify.service';
 import { VendorLeadService } from './lead.service';
 import { quotePublicUrl } from './quote.service';
-import { MessageTemplateType } from '../../constants/vendorOs';
+import { MESSAGE_VARIABLES, MessageTemplateType } from '../../constants/vendorOs';
+import { VendorActivity } from '../../models/vendor-os/vendor-activity.model';
+import { VendorUser } from '../../models/vendor-os/vendor-user.model';
 import {
   VENDOR_OS_PUBLIC_URL,
   badRequest,
   buildWhatsAppLink,
+  forbidden,
   formatDisplayDate,
   formatINR,
   normalizePhone,
@@ -174,7 +177,96 @@ const SYSTEM_TEMPLATES: SystemTemplate[] = [
     language: 'en',
     body: 'Hello {{clientName}},\n\nHere is our schedule for the {{functionType}} on {{eventDate}}:\n{{runSheetSummary}}\n\nLive schedule: {{runSheetLink}}\nLet us know if anything should change.\n{{businessName}}',
   },
+  {
+    key: 'client_welcome',
+    name: 'नए क्लाइंट का स्वागत',
+    type: 'general',
+    language: 'hi',
+    body: 'नमस्ते {{clientName}} जी 🙏\n\n{{businessName}} से जुड़ने के लिए धन्यवाद! हमारा काम, पैकेज और रिव्यू यहाँ देखें: {{profileLink}}\n{{brochureLine}}\nकोई भी सवाल हो तो इसी नंबर पर मैसेज करें।',
+  },
+  {
+    key: 'quote_share',
+    name: 'कोटेशन भेजें',
+    type: 'quote',
+    language: 'hi',
+    body: 'नमस्ते {{clientName}} जी 🙏\n\n{{businessName}} की ओर से आपका कोटेशन ({{quoteNumber}}) तैयार है।\nकुल: {{quoteTotal}}\nमान्य: {{validTill}} तक\n\nकोटेशन देखें और स्वीकार करें: {{quoteLink}}\n\nकोई सवाल हो तो इसी नंबर पर मैसेज करें।',
+  },
+  {
+    key: 'payment_receipt',
+    name: 'भुगतान रसीद',
+    type: 'receipt',
+    language: 'hi',
+    body: 'नमस्ते {{clientName}} जी,\n\n{{paidAmount}} का भुगतान मिल गया है — धन्यवाद! 🙏\nरसीद नंबर: {{receiptNo}}\nरसीद: {{receiptLink}}\nशेष बकाया: {{balance}}\n\n{{businessName}}',
+  },
+  {
+    key: 'event_schedule',
+    name: 'कार्यक्रम का शेड्यूल',
+    type: 'schedule',
+    language: 'hi',
+    body: 'नमस्ते {{clientName}} जी,\n\nआपकी बुकिंग {{bookingNumber}} का शेड्यूल:\n{{eventSummary}}\n\nकुछ बदलाव हो तो ज़रूर बताएं।\n{{businessName}}',
+  },
+  {
+    key: 'thank_you',
+    name: 'धन्यवाद',
+    type: 'thank_you',
+    language: 'hi',
+    body: 'नमस्ते {{clientName}} जी,\n\nआपकी शादी का हिस्सा बनने देने के लिए दिल से धन्यवाद! 🙏✨\nअगर आपको हमारा काम पसंद आया हो तो ApnaUtsav पर एक रिव्यू ज़रूर दें: {{profileLink}}\n\n{{businessName}}',
+  },
+  {
+    key: 'follow_up',
+    name: 'फ़ॉलो-अप',
+    type: 'follow_up',
+    language: 'hi',
+    body: 'नमस्ते {{clientName}} जी,\n\n{{businessName}} से बात कर रहे हैं। {{weddingDateLine}}क्या आपने फ़ैसला किया? आपकी तारीख़ अभी उपलब्ध है — पक्का करने के लिए बस जवाब दें। 🙏',
+  },
+  {
+    key: 'call_sheet',
+    name: 'क्रू कॉल शीट',
+    type: 'call_sheet',
+    language: 'hi',
+    body: 'नमस्ते {{crewName}} जी 🙏\n\n{{eventDate}} — {{functionType}} ({{clientName}})\nआपकी भूमिका: {{crewRole}}\nरिपोर्टिंग समय: {{callTime}}\nवेन्यू: {{venue}}\n\nपूरा शेड्यूल: {{runSheetLink}}\n\nपक्का करने के लिए जवाब दें। कोई दिक्कत हो तो कॉल करें: {{managerPhone}}\n{{businessName}}',
+  },
+  {
+    key: 'run_sheet_share',
+    name: 'इवेंट-डे शेड्यूल भेजें',
+    type: 'run_sheet',
+    language: 'hi',
+    body: 'नमस्ते {{clientName}} जी 🙏\n\n{{functionType}} ({{eventDate}}) का हमारा इवेंट-डे शेड्यूल:\n{{runSheetSummary}}\n\nलाइव शेड्यूल: {{runSheetLink}}\nकुछ बदलाव चाहिए तो बताएं।\n{{businessName}}',
+  },
 ];
+
+const SYSTEM_TYPE_OF = new Map(SYSTEM_TEMPLATES.map((t) => [t.key, t.type]));
+const MAX_CUSTOM_TEMPLATES = 50;
+const VARIABLE_KEYS = new Set(MESSAGE_VARIABLES.map((v) => v.key));
+const SAMPLES: Record<string, string> = Object.fromEntries(MESSAGE_VARIABLES.map((v) => [v.key, v.sample]));
+
+const weddingDateSentence = (date: string, language: string) =>
+  language === 'en'
+    ? `About your wedding on ${date}. `
+    : language === 'hi'
+      ? `आपकी ${date} की शादी के बारे में। `
+      : `Aapki ${date} ki shaadi ke baare mein. `;
+
+/** The {{variables}} a template body uses, in order of first use. */
+export const templateVariables = (body: string): string[] => [
+  ...new Set([...body.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1])),
+];
+
+// Staff don't see booking money (spec section 8), so they can't send a
+// message that prints it: payment templates, or any body using these.
+// Quote totals stay allowed, since staff build and share quotes.
+const MONEY_TYPES = new Set<string>(['payment_reminder', 'receipt']);
+const MONEY_VARIABLES = new Set(['amount', 'balance', 'paidAmount', 'upiLine', 'receiptNo', 'receiptLink']);
+const assertMoneyAllowed = (canSeeMoney: boolean, type: string | undefined, body: string) => {
+  if (canSeeMoney) return;
+  if ((type && MONEY_TYPES.has(type)) || templateVariables(body).some((k) => MONEY_VARIABLES.has(k))) {
+    throw forbidden('Only owners and managers can send messages with payment amounts');
+  }
+};
+
+// "…Line" variables are whole optional sentences (UPI, brochure, wedding
+// date) — empty is a valid result, not something the vendor must attach.
+const OPTIONAL_VARIABLES = new Set(['upiLine', 'brochureLine', 'weddingDateLine']);
 
 let defaultsEnsured = false;
 
@@ -192,6 +284,11 @@ export interface ComposeInput {
   phone?: string;
   variables?: Record<string, string>;
   log?: boolean;
+}
+
+export interface PreviewInput extends Omit<ComposeInput, 'templateKey' | 'log' | 'variables'> {
+  /** Fill anything the attached records don't cover with sample values. */
+  sample?: boolean;
 }
 
 export class VendorWhatsAppService {
@@ -218,15 +315,42 @@ export class VendorWhatsAppService {
     if (type) filter.type = type;
     const all = await MessageTemplate.find(filter).sort({ type: 1, key: 1, language: 1 }).lean();
     const own = new Set(all.filter((t) => t.vendorId).map((t) => `${t.key}|${t.language}`));
-    return all
-      .filter((t) => t.vendorId || !own.has(`${t.key}|${t.language}`))
-      .map((t) => ({ ...t, system: !t.vendorId }));
+    const visible = all.filter((t) => t.vendorId || !own.has(`${t.key}|${t.language}`));
+
+    // Sends per template key (all languages), from the timeline log.
+    const stats = await VendorActivity.aggregate<{ _id: string; count: number; lastSentAt: Date }>([
+      { $match: { vendorId, channel: 'whatsapp', templateKey: { $in: [...new Set(visible.map((t) => t.key))] } } },
+      { $group: { _id: '$templateKey', count: { $sum: 1 }, lastSentAt: { $max: '$createdAt' } } },
+    ]);
+    const statOf = new Map(stats.map((x) => [x._id, x]));
+
+    return visible.map((t) => ({
+      ...t,
+      system: !t.vendorId,
+      // system = ApnaUtsav default, edited = the vendor's copy of a default
+      // (delete reverts it), custom = the vendor's own template.
+      origin: !t.vendorId ? 'system' : SYSTEM_TYPE_OF.has(t.key) ? 'edited' : 'custom',
+      variables: templateVariables(t.body),
+      sentCount: statOf.get(t.key)?.count || 0,
+      lastSentAt: statOf.get(t.key)?.lastSentAt || null,
+    }));
+  }
+
+  static variables() {
+    return MESSAGE_VARIABLES;
   }
 
   static async createTemplate(vendorId: Id, data: Partial<IMessageTemplate>) {
     const key = data.key || `custom_${Date.now().toString(36)}`;
+    // A default's key (e.g. a Hindi version of quote_share) keeps the
+    // default's type, so the app still finds it when it sends that message.
+    const type = SYSTEM_TYPE_OF.get(key) || data.type;
+    if (!SYSTEM_TYPE_OF.has(key)) {
+      const count = await MessageTemplate.countDocuments({ vendorId, key: { $nin: [...SYSTEM_TYPE_OF.keys()] } });
+      if (count >= MAX_CUSTOM_TEMPLATES) throw badRequest(`You can keep up to ${MAX_CUSTOM_TEMPLATES} templates of your own`);
+    }
     try {
-      return await MessageTemplate.create({ ...data, key, vendorId });
+      return await MessageTemplate.create({ ...data, key, type, vendorId });
     } catch (err: any) {
       if (err?.code === 11000) throw badRequest('You already have a template with this key and language — edit it instead');
       throw err;
@@ -249,6 +373,7 @@ export class VendorWhatsAppService {
     }
     if (data.name !== undefined) template.name = data.name;
     if (data.body !== undefined) template.body = data.body;
+    if (data.type !== undefined && !SYSTEM_TYPE_OF.has(template.key)) template.type = data.type;
     if (data.isActive !== undefined) template.isActive = data.isActive;
     await template.save();
     return template;
@@ -326,12 +451,7 @@ export class VendorWhatsAppService {
       phone = phone || lead.contact.phone;
       if (lead.weddingDates.length) {
         vars.weddingDate = formatDisplayDate(lead.weddingDates[0]);
-        vars.weddingDateLine =
-          language === 'en'
-            ? `About your wedding on ${vars.weddingDate}. `
-            : language === 'hi'
-              ? `आपकी ${vars.weddingDate} की शादी के बारे में। `
-              : `Aapki ${vars.weddingDate} ki shaadi ke baare mein. `;
+        vars.weddingDateLine = weddingDateSentence(vars.weddingDate, language);
       }
     }
     if (quote) {
@@ -384,13 +504,54 @@ export class VendorWhatsAppService {
   }
 
   /**
+   * Renders a template (saved, or the unsaved `body` being edited) without
+   * logging anything. With `sample`, variables the attached records don't
+   * fill take sample values — for the template screen's preview and its
+   * "Send test message", which goes to the signed-in user's own WhatsApp
+   * unless a phone is given. Without it, `missing` lists what the vendor
+   * still has to attach (a booking, a quote…) before sending for real.
+   */
+  static async preview(vendorId: Id, userId: string, input: PreviewInput, canSeeMoney = true) {
+    const template = input.templateId ? await this.resolveTemplate(vendorId, { templateId: input.templateId }) : null;
+    const body = input.body ?? template?.body;
+    if (!body) throw badRequest('Provide templateId or body');
+    // A sample preview shows sample amounts only, so staff may see it.
+    if (!input.sample) assertMoneyAllowed(canSeeMoney, template?.type, body);
+    const language = input.language || template?.language || 'hinglish';
+
+    const { vars, phone } = await this.buildContext(vendorId, input, language);
+    const used = templateVariables(body);
+    const unknown = used.filter((k) => !VARIABLE_KEYS.has(k));
+    const empty = used.filter((k) => VARIABLE_KEYS.has(k) && !vars[k]);
+    if (input.sample) {
+      for (const k of empty) vars[k] = k === 'weddingDateLine' ? weddingDateSentence(SAMPLES.weddingDate, language) : SAMPLES[k];
+    }
+    const message = renderTemplate(body, vars).replace(/\n{3,}/g, '\n\n').trim();
+
+    let to = phone;
+    if (input.sample && !input.phone) {
+      const me = await VendorUser.findById(userId).select('phone').lean();
+      to = me?.phone || undefined;
+    }
+    return {
+      message,
+      phone: to || null,
+      waLink: buildWhatsAppLink(to, message),
+      variables: used,
+      unknown,
+      missing: input.sample ? [] : empty.filter((k) => !OPTIONAL_VARIABLES.has(k)),
+    };
+  }
+
+  /**
    * Renders a template (or free text) for the given lead/booking/quote/
    * payment and returns a wa.me link. Logged to the timeline as "sent" —
    * with deep links we can't observe delivery, so tapping "Send" counts.
    */
-  static async compose(vendorId: Id, userId: string, input: ComposeInput) {
+  static async compose(vendorId: Id, userId: string, input: ComposeInput, canSeeMoney = true) {
     const template = await this.resolveTemplate(vendorId, input);
     if (!template && !input.body) throw badRequest('Provide templateId, templateKey or body');
+    assertMoneyAllowed(canSeeMoney, template?.type, input.body || template!.body);
 
     const { vars, phone, ids } = await this.buildContext(vendorId, input, template?.language || input.language);
     const message = renderTemplate(input.body || template!.body, vars).replace(/\n{3,}/g, '\n\n').trim();
