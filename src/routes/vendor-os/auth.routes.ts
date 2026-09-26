@@ -17,6 +17,7 @@ import {
   tokenSchema,
   updateMeSchema,
   verifyOtpSchema,
+  pushTokenSchema,
 } from '../../validators/vendor-os.validator';
 
 // /vendor-os/auth — VendorOS sign in / sign up. Separate from /auth (the
@@ -174,6 +175,27 @@ const router: Router = Router();
  *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200: { description: OK }
+ * /vendor-os/auth/push-token:
+ *   post:
+ *     summary: "Turn on push for this browser / phone: store its FCM token (a token moves to whoever signed in last on that device)"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [token], properties: { token: { type: string } } }
+ *     responses:
+ *       200: { description: "{ devices }" }
+ *   delete:
+ *     summary: "Turn off push for this device"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [token], properties: { token: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
  * /vendor-os/auth/logout:
  *   post:
  *     summary: "Sign out (revokes the refresh token and FCM token)"
@@ -264,6 +286,8 @@ router.get('/me', vendorAuth, C.me);
  */
 router.patch('/me', vendorAuth, validate(updateMeSchema), C.updateMe);
 router.post('/logout', vendorAuth, C.logout);
+router.post('/push-token', vendorAuth, validate(pushTokenSchema), C.registerPushToken);
+router.delete('/push-token', vendorAuth, validate(pushTokenSchema), C.removePushToken);
 router.post('/resend-verification', vendorAuth, C.resendVerification);
 router.post('/change-password', vendorAuth, validate(changePasswordSchema), C.changePassword);
 router.post('/phone/send-otp', vendorAuth, validate(phoneLinkSchema), C.sendPhoneLinkOtp);

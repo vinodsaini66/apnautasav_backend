@@ -13,6 +13,7 @@ import { loggingMiddleware } from './middleware/logging.middleware';
 // import { rateLimitMiddleware } from './middleware/rateLimit.middleware';
 import mongoose from 'mongoose';
 import { initializeSocket } from './config/socket';
+import { attachVendorRealtime } from './services/vendor-os/vendor-realtime';
 import { createServer } from 'http';
 import './cron/wedding';
 import './cron/taskReminder';
@@ -28,6 +29,8 @@ const PORT = process.env.PORT || 5000;
 // Initialize Socket.IO
 const socketServer = initializeSocket(httpServer);
 app.set('socketServer', socketServer);
+// Vendor OS panel: its own namespace and token (live notifications).
+attachVendorRealtime(socketServer.getIO());
 
 // Security middleware
 app.use(helmet());

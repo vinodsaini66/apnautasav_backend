@@ -92,7 +92,7 @@ export class VendorInsightsService {
       },
     };
 
-    result.unreadNotifications = await this.unreadCount(vendorId, vendorUserId);
+    result.unreadNotifications = await this.unreadCount(vendorId, vendorUserId, includeFinancials);
     Object.assign(result, await this.dashboardExtras(vendorId, vendorUserId, upcoming as any[], includeFinancials));
 
     if (includeFinancials) {
@@ -380,19 +380,23 @@ export class VendorInsightsService {
   // Notifications
   // -------------------------------------------------------------------
 
-  private static notificationFilter(vendorId: Id, vendorUserId: string) {
-    return { vendorId, $or: [{ vendorUserId: { $exists: false } }, { vendorUserId: null }, { vendorUserId: new mongoose.Types.ObjectId(vendorUserId) }] };
+  // A notification without vendorUserId goes to the owner/manager logins
+  // (VendorNotifyService.notify pushes it to them only), and often carries
+  // amounts, so staff and crew see just the ones addressed to them.
+  private static notificationFilter(vendorId: Id, vendorUserId: string, managers: boolean) {
+    const mine = { vendorUserId: new mongoose.Types.ObjectId(vendorUserId) };
+    return managers ? { vendorId, $or: [{ vendorUserId: { $exists: false } }, { vendorUserId: null }, mine] } : { vendorId, ...mine };
   }
 
-  static async listNotifications(vendorId: Id, vendorUserId: string, query: any) {
+  static async listNotifications(vendorId: Id, vendorUserId: string, query: any, managers: boolean) {
     const { page, limit, skip } = parsePagination(query);
-    const filter: any = this.notificationFilter(vendorId, vendorUserId);
+    const filter: any = this.notificationFilter(vendorId, vendorUserId, managers);
     const userOid = new mongoose.Types.ObjectId(vendorUserId);
     if (query.unread === 'true') filter.readBy = { $ne: userOid };
     const [items, total, unread] = await Promise.all([
       VendorNotification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       VendorNotification.countDocuments(filter),
-      VendorNotification.countDocuments({ ...this.notificationFilter(vendorId, vendorUserId), readBy: { $ne: userOid } }),
+      VendorNotification.countDocuments({ ...this.notificationFilter(vendorId, vendorUserId, managers), readBy: { $ne: userOid } }),
     ]);
     return {
       items: items.map(({ readBy, ...n }) => ({ ...n, read: readBy.some((id) => String(id) === vendorUserId) })),
@@ -403,15 +407,15 @@ export class VendorInsightsService {
     };
   }
 
-  static async unreadCount(vendorId: Id, vendorUserId: string) {
+  static async unreadCount(vendorId: Id, vendorUserId: string, managers: boolean) {
     return VendorNotification.countDocuments({
-      ...this.notificationFilter(vendorId, vendorUserId),
+      ...this.notificationFilter(vendorId, vendorUserId, managers),
       readBy: { $ne: new mongoose.Types.ObjectId(vendorUserId) },
     });
   }
 
-  static async markRead(vendorId: Id, vendorUserId: string, notificationId?: string) {
-    const filter: any = this.notificationFilter(vendorId, vendorUserId);
+  static async markRead(vendorId: Id, vendorUserId: string, managers: boolean, notificationId?: string) {
+    const filter: any = this.notificationFilter(vendorId, vendorUserId, managers);
     if (notificationId) filter._id = new mongoose.Types.ObjectId(notificationId);
     await VendorNotification.updateMany(filter, { $addToSet: { readBy: new mongoose.Types.ObjectId(vendorUserId) } });
   }

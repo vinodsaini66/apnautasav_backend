@@ -42,6 +42,8 @@ export const verifyOtpSchema = z.object({
   }),
 });
 
+export const pushTokenSchema = z.object({ body: z.object({ token: z.string().trim().min(20).max(500) }) });
+
 export const refreshSchema = z.object({ body: z.object({ refreshToken: z.string().min(10) }) });
 
 export const updateMeSchema = z.object({

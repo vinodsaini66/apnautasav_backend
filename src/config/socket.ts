@@ -20,7 +20,10 @@ export class SocketServer {
   constructor(httpServer: HTTPServer) {
     this.io = new Server(httpServer, {
       cors: {
-        origin: process.env.CORS_ORIGIN?.split(',') || '*',
+        // The Vendor OS panel (its own origin) connects to the /vendor-os namespace.
+        origin: process.env.CORS_ORIGIN
+          ? [...process.env.CORS_ORIGIN.split(','), ...(process.env.VENDOR_OS_PUBLIC_URL ? [process.env.VENDOR_OS_PUBLIC_URL] : [])]
+          : '*',
         credentials: true
       },
       pingTimeout: 60000,

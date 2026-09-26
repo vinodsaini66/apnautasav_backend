@@ -262,6 +262,13 @@ router.delete('/portfolio/media/:mediaId', office, Profile.deleteMedia);
  *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200: { description: OK }
+ * /vendor-os/notifications/test:
+ *   post:
+ *     summary: "Send yourself a test notification (in-app, live socket and push to your registered devices)"
+ *     tags: [Vendor OS Dashboard]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: "{ notificationId, live, push: { configured, devices, sent, failed, removed } }" }
  * /vendor-os/notifications/{notificationId}/read:
  *   post:
  *     summary: "Mark one notification read"
@@ -275,6 +282,7 @@ router.delete('/portfolio/media/:mediaId', office, Profile.deleteMedia);
 router.get('/notifications', everyone, Workspace.listNotifications);
 router.post('/notifications/read-all', everyone, Workspace.markAllNotificationsRead);
 router.post('/notifications/:notificationId/read', everyone, Workspace.markNotificationRead);
+router.post('/notifications/test', everyone, Workspace.testNotification);
 
 // Everything below is the operational panel: needs a verified login and an
 // ApnaUtsav-approved listing (onboarding.nextStep === 'dashboard').

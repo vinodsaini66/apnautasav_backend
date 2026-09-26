@@ -5,6 +5,8 @@ export interface SendPushNotificationOptions {
     title: string;
     body: string;
     data?: Record<string, string | number | boolean>;
+    /** Browser-specific options (icon, badge, tag, click link). */
+    webpush?: admin.messaging.WebpushConfig;
 }
 
 export interface SendPushNotificationResponse {
@@ -18,6 +20,7 @@ export const sendPushNotification = async ({
     title,
     body,
     data = {},
+    webpush,
 }: SendPushNotificationOptions): Promise<SendPushNotificationResponse> => {
     try {
         if (!isFirebaseConfigured) {
@@ -42,6 +45,7 @@ export const sendPushNotification = async ({
                     String(value), // FCM requires string values
                 ])
             ),
+            ...(webpush ? { webpush } : {}),
         };
 
         const response = await admin

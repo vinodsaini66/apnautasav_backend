@@ -91,6 +91,15 @@ export class VendorOsAuthController {
     ApiResponse.success(res, 200, { message: 'Profile updated', data: await VendorAuthService.updateMe(userIdOf(req), req.body) });
   }, 'update me');
 
+  static registerPushToken = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { message: 'Push notifications turned on for this device', data: await VendorAuthService.registerPushToken(userIdOf(req), req.body.token) });
+  }, 'register push token');
+
+  static removePushToken = handle(async (req: Request, res: Response) => {
+    await VendorAuthService.removePushToken(userIdOf(req), req.body.token);
+    ApiResponse.success(res, 200, { message: 'Push notifications turned off for this device' });
+  }, 'remove push token');
+
   static logout = handle(async (req: Request, res: Response) => {
     await VendorAuthService.logout(userIdOf(req), req.body?.fcmToken);
     ApiResponse.success(res, 200, { message: 'Logged out successfully' });

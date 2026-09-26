@@ -521,6 +521,21 @@ export class VendorAuthService {
     return this.toPublicUser(user);
   }
 
+  /** This browser / phone opted in to push: keep its FCM token (newest 5 per login). */
+  static async registerPushToken(vendorUserId: string, token: string) {
+    const user = await VendorUser.findById(vendorUserId).select('+fcmTokens');
+    if (!user) throw new VendorOsError(401, 'Session expired');
+    // A token belongs to one device, so it moves when someone else signs in there.
+    await VendorUser.updateMany({ _id: { $ne: user._id }, fcmTokens: token }, { $pull: { fcmTokens: token } });
+    user.fcmTokens = [...(user.fcmTokens || []).filter((t) => t !== token).slice(-4), token];
+    await user.save();
+    return { devices: user.fcmTokens.length };
+  }
+
+  static async removePushToken(vendorUserId: string, token: string) {
+    await VendorUser.updateOne({ _id: vendorUserId }, { $pull: { fcmTokens: token } });
+  }
+
   static async logout(vendorUserId: string, fcmToken?: string) {
     if (!fcmToken) return;
     await VendorUser.updateOne({ _id: vendorUserId }, { $pull: { fcmTokens: fcmToken } });
