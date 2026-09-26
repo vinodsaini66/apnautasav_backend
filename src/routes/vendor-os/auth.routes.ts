@@ -17,6 +17,7 @@ import {
   tokenSchema,
   updateMeSchema,
   verifyOtpSchema,
+  pushTokenSchema,
 } from '../../validators/vendor-os.validator';
 
 // /vendor-os/auth — VendorOS sign in / sign up. Separate from /auth (the
@@ -58,23 +59,190 @@ const router: Router = Router();
  *   post:
  *     summary: '"Email link" button — emails a one-time 15-minute login link (creates the account for a new email)'
  *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [email], properties: { email: { type: string } } }
+ *     responses:
+ *       200: { description: Link sent }
  * /vendor-os/auth/email-link/verify:
  *   post:
  *     summary: Exchange the token from the email link for a session
  *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [token], properties: { token: { type: string }, fcmToken: { type: string } } }
+ *     responses:
+ *       200: { description: Session }
+ *       400: { description: Invalid or expired link }
  * /vendor-os/auth/send-otp:
  *   post:
  *     summary: '"Mobile OTP" button — send OTP (always 123456 when NODE_ENV=development)'
  *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [phone], properties: { phone: { type: string, example: '9876543210' } } }
+ *     responses:
+ *       200: { description: "{ isNewUser }" }
+ *       429: { description: Resend cooldown (30 s) }
  * /vendor-os/auth/verify-otp:
  *   post:
  *     summary: Verify OTP → session
  *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [phone, otp], properties: { phone: { type: string }, otp: { type: string, example: '123456' }, name: { type: string }, fcmToken: { type: string } } }
+ *     responses:
+ *       200: { description: Session }
+ *       400: { description: Wrong or expired OTP }
  * /vendor-os/auth/basic-profile:
  *   put:
  *     summary: Save the basic profile (business name, category, city, contact mobile, contact person). Returns a fresh session.
  *     tags: [Vendor OS Auth]
  *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { businessName: { type: string }, osCategory: { type: string, example: photography }, city: { type: string }, state: { type: string }, contactPerson: { type: string }, phone: { type: string }, whatsappNumber: { type: string }, email: { type: string }, subTags: { type: array, items: { type: string } } } }
+ *     responses:
+ *       200: { description: "Session; onboarding.missingFields lists what is still needed" }
+ *   get:
+ *     summary: "The basic profile and onboarding state ({ vendor, onboarding })"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/onboarding:
+ *   post:
+ *     summary: "Old single-step onboarding; same body and behaviour as PUT /auth/basic-profile"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, properties: { businessName: { type: string }, osCategory: { type: string, example: photography }, city: { type: string }, state: { type: string }, contactPerson: { type: string }, phone: { type: string }, whatsappNumber: { type: string }, email: { type: string }, subTags: { type: array, items: { type: string } } } }
+ *     responses:
+ *       200: { description: Session }
+ * /vendor-os/auth/forgot-password:
+ *   post:
+ *     summary: "Email a password-reset link (always 200, so emails cannot be probed)"
+ *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [email], properties: { email: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/reset-password:
+ *   post:
+ *     summary: "Set a new password with the emailed token; returns a session"
+ *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [token, password], properties: { token: { type: string, description: 64 hex characters }, password: { type: string, minLength: 8 } } }
+ *     responses:
+ *       200: { description: Session }
+ *       400: { description: Invalid or expired link }
+ * /vendor-os/auth/verify-email:
+ *   post:
+ *     summary: "Verify the email address with the emailed token"
+ *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [token], properties: { token: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/refresh-token:
+ *   post:
+ *     summary: "Exchange a refresh token for a new token pair"
+ *     tags: [Vendor OS Auth]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [refreshToken], properties: { refreshToken: { type: string } } }
+ *     responses:
+ *       200: { description: Session }
+ *       401: { description: Invalid refresh token }
+ * /vendor-os/auth/me:
+ *   get:
+ *     summary: "The signed-in user, business and onboarding state"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/push-token:
+ *   post:
+ *     summary: "Turn on push for this browser / phone: store its FCM token (a token moves to whoever signed in last on that device)"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [token], properties: { token: { type: string } } }
+ *     responses:
+ *       200: { description: "{ devices }" }
+ *   delete:
+ *     summary: "Turn off push for this device"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [token], properties: { token: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/logout:
+ *   post:
+ *     summary: "Sign out (revokes the refresh token and FCM token)"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/resend-verification:
+ *   post:
+ *     summary: "Send the email verification link again"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/change-password:
+ *   post:
+ *     summary: "Change (or set, for OTP-only accounts) the password; other devices are signed out"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [newPassword], properties: { currentPassword: { type: string }, newPassword: { type: string, minLength: 8 } } }
+ *     responses:
+ *       200: { description: Session }
+ * /vendor-os/auth/phone/send-otp:
+ *   post:
+ *     summary: "Send an OTP to add / verify a mobile number on this account"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [phone], properties: { phone: { type: string } } }
+ *     responses:
+ *       200: { description: OK }
+ * /vendor-os/auth/phone/verify:
+ *   post:
+ *     summary: "Verify the mobile OTP; returns a fresh session"
+ *     tags: [Vendor OS Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [otp], properties: { otp: { type: string, example: '123456' } } }
+ *     responses:
+ *       200: { description: Session }
  */
 
 // ---- email + password ------------------------------------------------------
@@ -118,6 +286,8 @@ router.get('/me', vendorAuth, C.me);
  */
 router.patch('/me', vendorAuth, validate(updateMeSchema), C.updateMe);
 router.post('/logout', vendorAuth, C.logout);
+router.post('/push-token', vendorAuth, validate(pushTokenSchema), C.registerPushToken);
+router.delete('/push-token', vendorAuth, validate(pushTokenSchema), C.removePushToken);
 router.post('/resend-verification', vendorAuth, C.resendVerification);
 router.post('/change-password', vendorAuth, validate(changePasswordSchema), C.changePassword);
 router.post('/phone/send-otp', vendorAuth, validate(phoneLinkSchema), C.sendPhoneLinkOtp);

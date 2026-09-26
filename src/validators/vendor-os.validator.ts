@@ -42,6 +42,8 @@ export const verifyOtpSchema = z.object({
   }),
 });
 
+export const pushTokenSchema = z.object({ body: z.object({ token: z.string().trim().min(20).max(500) }) });
+
 export const refreshSchema = z.object({ body: z.object({ refreshToken: z.string().min(10) }) });
 
 export const updateMeSchema = z.object({
@@ -600,7 +602,24 @@ const messageTemplateBody = z.object({
 export const createMessageTemplateSchema = z.object({ body: messageTemplateBody });
 export const updateMessageTemplateSchema = z.object({
   params: idParam('templateId'),
-  body: messageTemplateBody.pick({ name: true, body: true, isActive: true }).partial(),
+  body: messageTemplateBody.pick({ name: true, type: true, body: true, isActive: true }).partial(),
+});
+export const previewMessageTemplateSchema = z.object({
+  body: z
+    .object({
+      templateId: objectId.optional(),
+      language: z.enum(MESSAGE_LANGUAGES).optional(),
+      body: z.string().max(4000).optional(),
+      leadId: objectId.optional(),
+      bookingId: objectId.optional(),
+      quoteId: objectId.optional(),
+      paymentId: objectId.optional(),
+      milestoneId: objectId.optional(),
+      clientId: objectId.optional(),
+      phone: phone.optional(),
+      sample: z.boolean().optional(),
+    })
+    .refine((b) => b.templateId || b.body?.trim(), 'Provide templateId or body'),
 });
 
 // ---------------------------------------------------------------------------

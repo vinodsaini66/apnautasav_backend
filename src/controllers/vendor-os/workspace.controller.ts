@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { VendorWhatsAppService } from '../../services/vendor-os/whatsapp.service';
 import { VendorInsightsService } from '../../services/vendor-os/insights.service';
 import { VendorTeamService } from '../../services/vendor-os/team.service';
+import { VendorNotifyService } from '../../services/vendor-os/vendor-notify.service';
 import { ApiResponse } from '../../utils/apiResponse';
 import { handle } from '../../utils/vendorOs';
 import { financials, q, userIdOf, vendorIdOf } from './_context';
@@ -27,7 +28,7 @@ export class VendorOsWorkspaceController {
 
   // ---- notifications --------------------------------------------------
   static listNotifications = handle(async (req: Request, res: Response) => {
-    const result = await VendorInsightsService.listNotifications(vendorIdOf(req), userIdOf(req), req.query);
+    const result = await VendorInsightsService.listNotifications(vendorIdOf(req), userIdOf(req), req.query, financials(req));
     res.status(200).json({
       status: 'success',
       data: result.items,
@@ -36,23 +37,43 @@ export class VendorOsWorkspaceController {
   }, 'list notifications');
 
   static markNotificationRead = handle(async (req: Request, res: Response) => {
-    await VendorInsightsService.markRead(vendorIdOf(req), userIdOf(req), req.params.notificationId);
+    await VendorInsightsService.markRead(vendorIdOf(req), userIdOf(req), financials(req), req.params.notificationId);
     ApiResponse.success(res, 200, { message: 'Marked as read' });
   }, 'mark notification read');
 
   static markAllNotificationsRead = handle(async (req: Request, res: Response) => {
-    await VendorInsightsService.markRead(vendorIdOf(req), userIdOf(req));
+    await VendorInsightsService.markRead(vendorIdOf(req), userIdOf(req), financials(req));
     ApiResponse.success(res, 200, { message: 'All notifications marked as read' });
   }, 'mark all notifications read');
 
+  /** Settings → "Send test notification": a notification to yourself through every channel. */
+  static testNotification = handle(async (req: Request, res: Response) => {
+    const result = await VendorNotifyService.notify({
+      vendorId: vendorIdOf(req),
+      vendorUserId: userIdOf(req),
+      type: 'test',
+      title: 'Test notification',
+      body: 'Notifications are working on this device. New leads, quote views and payments will show up like this.',
+    });
+    ApiResponse.success(res, 200, { data: result });
+  }, 'test notification');
+
   // ---- WhatsApp -------------------------------------------------------
   static compose = handle(async (req: Request, res: Response) => {
-    ApiResponse.success(res, 200, { data: await VendorWhatsAppService.compose(vendorIdOf(req), userIdOf(req), req.body) });
+    ApiResponse.success(res, 200, { data: await VendorWhatsAppService.compose(vendorIdOf(req), userIdOf(req), req.body, financials(req)) });
   }, 'whatsapp compose');
 
   static listMessageTemplates = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 200, { data: await VendorWhatsAppService.listTemplates(vendorIdOf(req), q(req, 'type')) });
   }, 'list message templates');
+
+  static messageVariables = handle(async (_req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { data: VendorWhatsAppService.variables() });
+  }, 'message variables');
+
+  static previewMessageTemplate = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { data: await VendorWhatsAppService.preview(vendorIdOf(req), userIdOf(req), req.body, financials(req)) });
+  }, 'preview message template');
 
   static createMessageTemplate = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 201, { message: 'Template saved', data: await VendorWhatsAppService.createTemplate(vendorIdOf(req), req.body) });

@@ -9,6 +9,7 @@ import { VendorUserRole } from '../../constants/vendorOs';
 import { badRequest, buildWhatsAppLink, notFound, toObjectId, VENDOR_OS_PUBLIC_URL } from '../../utils/vendorOs';
 import { VendorResource } from '../../models/vendor-os/vendor-resource.model';
 import logger from '../../utils/logger';
+import { disconnectVendorUser } from './vendor-realtime';
 
 type Id = mongoose.Types.ObjectId;
 
@@ -113,9 +114,12 @@ export class VendorTeamService {
 
     if (data.status === 'active' && member.status === 'disabled') await assertWithinPlan(vendorId, 'users');
     if (data.name !== undefined) member.name = data.name;
+    const roleChanged = !!data.role && data.role !== member.role;
     if (data.role) member.role = data.role;
     if (data.status) member.status = data.status === 'active' ? (member.lastLoginAt ? 'active' : 'invited') : 'disabled';
     await member.save();
+    // Live notifications follow the new rights: reconnect (or stay out, if paused).
+    if (roleChanged || data.status === 'disabled') disconnectVendorUser(String(member._id));
     return VendorAuthService.toPublicUser(member);
   }
 
@@ -138,5 +142,6 @@ export class VendorTeamService {
     member.role = 'owner';
     member.status = 'active';
     await member.save();
+    disconnectVendorUser(String(member._id));
   }
 }
