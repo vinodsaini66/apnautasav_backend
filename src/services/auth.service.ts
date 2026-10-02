@@ -253,12 +253,8 @@ export class AuthService {
         });
       }
 
-      // TODO: Send OTP via Twilio/SMS service
-      // For development, log the OTP
-      logger.info(`OTP for ${email}: ${otp}`);
-
-      // In production, use Twilio or similar service
-      // await this.sendSMS(phoneNumber, `Your wedding manager OTP is: ${otp}`);
+      if (process.env.NODE_ENV === 'development') logger.info(`OTP for ${email}: ${otp}`);
+      await EmailService.sendOTPEmail(email, otp, parseInt(process.env.OTP_EXPIRY_MINUTES || '10'));
 
       return {
         success: true,

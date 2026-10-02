@@ -1,6 +1,7 @@
 import { VendorEnquiry, IVendorEnquiry } from '../models/vendor-enquiry.model';
 import { VendorCategory } from '../models/vendor-category.model';
 import logger from '../utils/logger';
+import { EmailService } from './email.service';
 
 interface CreateEnquiryInput {
   name: string;
@@ -17,9 +18,8 @@ export class EnquiryValidationError extends Error {}
 export class VendorEnquiryService {
   /**
    * Save a vendor's "Partner With Us" enquiry. This must always succeed
-   * independently of email — the acknowledgement email is intentionally
-   * NOT sent here yet (see the comment below), and even once it is enabled
-   * it must never be awaited in a way that can fail the request: fire it
+   * independently of email — the acknowledgement email must never be
+   * awaited in a way that can fail the request: fire it
    * off after the enquiry is already saved, and let EmailService's own
    * internal try/catch (it never throws, only returns false) absorb any
    * failure.
@@ -46,20 +46,16 @@ export class VendorEnquiryService {
 
     logger.info(`Vendor enquiry received: ${enquiry._id} (${enquiry.businessName})`);
 
-    // --- Acknowledgement email — built, but deliberately not enabled yet ---
-    // SMTP credentials aren't configured in production yet. Once they are,
-    // enable this by uncommenting the block below. It's written so a
-    // failure here can NEVER affect the enquiry we already saved above:
-    // it runs after `create()`, isn't awaited into the response, and
+    // Acknowledgement email. Runs after `create()` and isn't awaited into the
+    // response, so a failure here can NEVER affect the enquiry saved above —
     // EmailService.sendVendorEnquiryAcknowledgement() itself never throws.
-    //
-    // EmailService.sendVendorEnquiryAcknowledgement(enquiry)
-    //   .then((sent) =>
-    //     VendorEnquiry.findByIdAndUpdate(enquiry._id, {
-    //       acknowledgementEmailStatus: sent ? 'sent' : 'failed',
-    //     }).catch((err) => logger.error('Failed to record ack-email status:', err))
-    //   )
-    //   .catch((err) => logger.error('Unexpected error sending vendor ack email:', err));
+    EmailService.sendVendorEnquiryAcknowledgement(enquiry)
+      .then((sent) =>
+        VendorEnquiry.findByIdAndUpdate(enquiry._id, {
+          acknowledgementEmailStatus: sent ? 'sent' : 'failed',
+        }).catch((err) => logger.error('Failed to record ack-email status:', err))
+      )
+      .catch((err) => logger.error('Unexpected error sending vendor ack email:', err));
 
     return enquiry;
   }
