@@ -7,18 +7,32 @@ import { IVendorEnquiry } from '../models/vendor-enquiry.model';
 // set up. See vendor-enquiry.service.ts for why this is currently built but
 // NOT called from the enquiry submission flow yet.
 export class EmailService {
-  private static transporter: Transporter | null =
-    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD
-      ? nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT) || 587,
-          secure: Number(process.env.SMTP_PORT) === 465,
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASSWORD,
-          },
-        })
-      : null;
+  private static transporter: Transporter | null = null;
+
+  // Built lazily on first send, NOT at import time: server.ts calls
+  // dotenv.config() after its imports, so SMTP_* aren't in process.env yet
+  // when this module is first loaded.
+  private static getTransporter(): Transporter | null {
+    if (this.transporter) return this.transporter;
+    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) return null;
+
+    this.transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: Number(process.env.SMTP_PORT) === 465,
+      // Reuse one authenticated connection instead of a fresh TLS+AUTH handshake per mail,
+      // and fail fast if the SMTP port is blocked (nodemailer's defaults are 2-10 minutes).
+      pool: true,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
+      },
+    });
+    return this.transporter;
+  }
 
   /**
    * Generic send — never throws. Callers get a boolean back so a failed
@@ -26,12 +40,13 @@ export class EmailService {
    */
   static async sendMail(to: string, subject: string, html: string): Promise<boolean> {
     try {
-      if (!this.transporter) {
+      const transporter = this.getTransporter();
+      if (!transporter) {
         logger.warn(`SMTP not configured, email not sent to ${to} ("${subject}")`);
         return false;
       }
 
-      await this.transporter.sendMail({
+      await transporter.sendMail({
         from: process.env.EMAIL_FROM || 'noreply@apnautsav.com',
         to,
         subject,
@@ -85,6 +100,13 @@ export class EmailService {
       'Reset your password — ApnaUtsav',
       passwordResetEmailTemplate(fullName, resetLink)
     );
+  }
+
+  /**
+   * Login OTP for the email+OTP flow (AuthService.sendOTP).
+   */
+  static async sendOTPEmail(to: string, otp: string, expiryMinutes: number): Promise<boolean> {
+    return this.sendMail(to, `${otp} is your ApnaUtsav login code`, otpEmailTemplate(otp, expiryMinutes));
   }
 }
 
@@ -255,6 +277,54 @@ function vendorEnquiryAcknowledgementTemplate(enquiry: IVendorEnquiry): string {
               <td style="padding:20px 32px 32px;border-top:1px solid #f3e4de;">
                 <p style="margin:0;font-size:12px;color:#9a9aa0;">
                   &copy; ${new Date().getFullYear()} ApnaUtsav &middot; This is an automated acknowledgement of your partnership enquiry.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function otpEmailTemplate(otp: string, expiryMinutes: number): string {
+  return `
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background-color:#fff6ef;font-family:Georgia,'Times New Roman',serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff6ef;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" style="max-width:520px;background-color:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(200,30,74,0.08);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#7a1330,#c81e4a,#fb4d61);padding:32px 32px 28px;text-align:center;">
+                <span style="display:inline-block;width:44px;height:44px;line-height:44px;border-radius:12px;background:rgba(255,255,255,0.18);color:#ffffff;font-size:20px;">&#9829;</span>
+                <div style="margin-top:12px;font-size:22px;font-weight:bold;color:#ffffff;">
+                  Apna<span style="color:#ffd88a;">Utsav</span>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px 32px 8px;">
+                <p style="margin:0 0 4px;font-size:12px;font-weight:bold;letter-spacing:0.08em;color:#c81e4a;text-transform:uppercase;">Login code</p>
+                <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#1e1b1f;">Your one-time code</h1>
+                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4b4b52;">
+                  Enter this code to sign in to ApnaUtsav.
+                </p>
+                <p style="margin:0 0 24px;text-align:center;font-family:'Courier New',monospace;font-size:34px;font-weight:bold;letter-spacing:0.3em;color:#7a1330;">
+                  ${escapeHtml(otp)}
+                </p>
+                <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#9a9aa0;">
+                  This code expires in ${expiryMinutes} minutes. If you didn't try to sign in, you can safely ignore
+                  this email.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px 32px;border-top:1px solid #f3e4de;">
+                <p style="margin:0;font-size:12px;color:#9a9aa0;">
+                  &copy; ${new Date().getFullYear()} ApnaUtsav &middot; This is an automated email, please don't reply.
                 </p>
               </td>
             </tr>
