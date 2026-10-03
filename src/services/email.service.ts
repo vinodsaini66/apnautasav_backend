@@ -20,6 +20,12 @@ export class EmailService {
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
       secure: Number(process.env.SMTP_PORT) === 465,
+      // Reuse one authenticated connection instead of a fresh TLS+AUTH handshake per mail,
+      // and fail fast if the SMTP port is blocked (nodemailer's defaults are 2-10 minutes).
+      pool: true,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASSWORD,

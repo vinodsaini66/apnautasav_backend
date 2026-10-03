@@ -36,7 +36,9 @@ export class AuthService {
     await user.save();
 
     const verificationLink = `${FRONTEND_BASE_URL}/auth/verify-email?token=${token}`;
-    await EmailService.sendVerificationEmail(user.email, fullName, verificationLink);
+    // Not awaited: Gmail SMTP takes ~5-6s per send, which pushed this request
+    // past the frontend's 10s timeout. sendMail never throws (logs + returns false).
+    void EmailService.sendVerificationEmail(user.email, fullName, verificationLink);
   }
 
   static async signup(email: string, password: string, fullName: string): Promise<{ message: string }> {
@@ -162,7 +164,7 @@ export class AuthService {
     await user.save();
 
     const resetLink = `${FRONTEND_BASE_URL}/auth/reset-password?token=${token}`;
-    await EmailService.sendPasswordResetEmail(user.email, user.fullName, resetLink);
+    void EmailService.sendPasswordResetEmail(user.email, user.fullName, resetLink); // not awaited, see createAndSendVerification
 
     return { message: genericMessage };
   }
@@ -254,7 +256,7 @@ export class AuthService {
       }
 
       if (process.env.NODE_ENV === 'development') logger.info(`OTP for ${email}: ${otp}`);
-      await EmailService.sendOTPEmail(email, otp, parseInt(process.env.OTP_EXPIRY_MINUTES || '10'));
+      void EmailService.sendOTPEmail(email, otp, parseInt(process.env.OTP_EXPIRY_MINUTES || '10'));
 
       return {
         success: true,
