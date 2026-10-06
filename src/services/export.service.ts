@@ -6,6 +6,19 @@ export interface ExportColumn {
   label: string;
 }
 
+/**
+ * Track C: an agency on a plan with branded exports gets its own name, logo
+ * and colour on PDFs from its client weddings (services/org/org-branding.ts
+ * builds this). Absent = the plain ApnaUtsav PDF, exactly as before.
+ */
+export interface ExportBranding {
+  name: string;
+  color?: string;
+  /** PNG/JPEG bytes (the only formats pdfkit embeds). */
+  logo?: Buffer;
+  showPoweredBy: boolean;
+}
+
 // Wraps a value in quotes and escapes internal quotes whenever it contains
 // a comma, quote, or newline — the standard CSV escaping rule (RFC 4180).
 const escapeCsvValue = (value: any): string => {
@@ -27,10 +40,10 @@ export const toCSV = (rows: Record<string, any>[], columns: ExportColumn[]): str
 // a new page (re-printing the header) whenever it runs out of vertical
 // room. Good enough for the export lists this backs — tens to low
 // hundreds of rows, not a print-grade report.
-export const toPDF = (title: string, rows: Record<string, any>[], columns: ExportColumn[]): Promise<Buffer> => {
+export const toPDF = (title: string, rows: Record<string, any>[], columns: ExportColumn[], branding?: ExportBranding): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+      const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape', bufferPages: !!branding });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -68,6 +81,30 @@ export const toPDF = (title: string, rows: Record<string, any>[], columns: Expor
         drawHeaderRule();
       };
 
+      if (branding) {
+        const accent = branding.color || '#9e2b46';
+        let textLeft = left;
+        if (branding.logo) {
+          try {
+            doc.image(branding.logo, left, y, { fit: [44, 44] });
+            textLeft = left + 56;
+          } catch {
+            // Unreadable logo — fall back to the name only.
+          }
+        }
+        doc.fontSize(14).font('Helvetica-Bold').fillColor(accent).text(branding.name, textLeft, y + 4, { lineBreak: false });
+        doc.fontSize(9).font('Helvetica').fillColor('#6b5a5f').text(
+          `Prepared ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+          textLeft,
+          y + 24,
+          { lineBreak: false }
+        );
+        y += 56;
+        doc.moveTo(left, y).lineTo(right, y).lineWidth(2).strokeColor(accent).stroke().lineWidth(1);
+        y += 12;
+        doc.fillColor('#000000');
+      }
+
       doc.fontSize(18).font('Helvetica-Bold').text(title, left, y);
       y = doc.y + 16;
 
@@ -80,6 +117,23 @@ export const toPDF = (title: string, rows: Record<string, any>[], columns: Expor
           drawHeader();
         }
         drawRow(columns.map((c) => (row[c.key] === null || row[c.key] === undefined ? '' : String(row[c.key]))), false);
+      }
+
+      if (branding) {
+        // Footer on every page, drawn last (bufferPages) so page counts are known.
+        const range = doc.bufferedPageRange();
+        const footer = branding.showPoweredBy ? `Prepared by ${branding.name} · Powered by ApnaUtsav` : `Prepared by ${branding.name}`;
+        for (let i = range.start; i < range.start + range.count; i++) {
+          doc.switchToPage(i);
+          const bottomMargin = doc.page.margins.bottom;
+          doc.page.margins.bottom = 0; // let us write inside the margin without pdfkit adding a page
+          doc
+            .fontSize(8)
+            .font('Helvetica')
+            .fillColor('#8a7a75')
+            .text(`${footer}   ·   Page ${i - range.start + 1} of ${range.count}`, left, doc.page.height - 26, { width: pageWidth, align: 'center', lineBreak: false });
+          doc.page.margins.bottom = bottomMargin;
+        }
       }
 
       doc.end();
@@ -98,10 +152,11 @@ export const sendExport = async (
   title: string,
   filenameBase: string,
   rows: Record<string, any>[],
-  columns: ExportColumn[]
+  columns: ExportColumn[],
+  branding?: ExportBranding | null
 ): Promise<void> => {
   if (format === 'pdf') {
-    const buffer = await toPDF(title, rows, columns);
+    const buffer = await toPDF(title, rows, columns, branding ?? undefined);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filenameBase}.pdf"`);
     res.send(buffer);

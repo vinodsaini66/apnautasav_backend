@@ -16,6 +16,7 @@ import { internalFilter } from '../services/access.service';
 import { User } from '../models/user.model';
 import { assignableStaffIds } from '../services/org/org-wedding.service';
 import { resolveTemplateAssignees, templateOrgsFor, visibleTemplateFilter } from '../services/org/org-template.service';
+import { exportBrandingFor } from '../services/org/org-branding';
 
 const TASK_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'title', label: 'Title' },
@@ -749,7 +750,7 @@ export class TaskController {
         assignedTo: (t.assignedTo || []).map((u: any) => u.fullName).filter(Boolean).join(', ')
       }));
 
-      await sendExport(res, format as string, 'Task List', 'task-list', rows, TASK_EXPORT_COLUMNS);
+      await sendExport(res, format as string, 'Task List', 'task-list', rows, TASK_EXPORT_COLUMNS, await exportBrandingFor(req.access));
     } catch (error: any) {
       logger.error('Export tasks error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to export tasks');

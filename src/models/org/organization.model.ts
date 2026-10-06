@@ -28,6 +28,9 @@ export interface IOrganization extends Document {
   billingPeriod?: BillingPeriod | null;
   trialEndsAt?: Date | null;
   currentPeriodEnd?: Date | null;
+  /** Off-season pause (M5): when it started and what status to go back to. Paused = read-only. */
+  pausedAt?: Date | null;
+  pausedFromStatus?: 'trial' | 'active' | null;
   /** Snapshotted from ORG_PLANS when the plan is set, so later price/limit edits never change what an org already has. */
   limitsSnapshot: OrgPlanLimits;
   /** An upgrade the org asked for from its billing screen, waiting for an admin to confirm payment. */
@@ -72,6 +75,8 @@ const organizationSchema = new Schema<IOrganization>(
     billingPeriod: { type: String, enum: ['monthly', 'annual', null], default: null },
     trialEndsAt: { type: Date, default: null },
     currentPeriodEnd: { type: Date, default: null },
+    pausedAt: { type: Date, default: null },
+    pausedFromStatus: { type: String, enum: ['trial', 'active', null], default: null },
     limitsSnapshot: {
       _id: false,
       activeWeddings: { type: Number, required: true },

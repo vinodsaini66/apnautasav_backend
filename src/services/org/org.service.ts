@@ -47,6 +47,7 @@ export const serializeOrg = (org: IOrganization, membership?: Pick<OrgMembership
   billingPeriod: org.billingPeriod ?? null,
   trialEndsAt: org.trialEndsAt ?? null,
   currentPeriodEnd: org.currentPeriodEnd ?? null,
+  pausedAt: org.pausedAt ?? null,
   limits: org.limitsSnapshot,
   readOnly: orgReadOnlyReason(org),
   defaultClientAccess: normaliseClientAccess(org.settings?.defaultClientAccess),

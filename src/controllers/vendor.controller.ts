@@ -14,6 +14,7 @@ import { sendExport, ExportColumn } from '../services/export.service';
 import { internalFilter, hasPermission } from '../services/access.service';
 import { PlanResolutionService, UNLIMITED } from '../services/plan-resolution.service';
 import { cleanVendorRow, ImportRowResult, MAX_IMPORT_ROWS, VendorImportRow, vendorKey } from '../services/vendor-import.service';
+import { exportBrandingFor } from '../services/org/org-branding';
 
 const VENDOR_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'vendorName', label: 'Vendor Name' },
@@ -491,7 +492,7 @@ export class VendorController {
         actualCost: v.actualCost ?? ''
       }));
 
-      await sendExport(res, format as string, 'Vendor List', 'vendor-list', rows, VENDOR_EXPORT_COLUMNS);
+      await sendExport(res, format as string, 'Vendor List', 'vendor-list', rows, VENDOR_EXPORT_COLUMNS, await exportBrandingFor(req.access));
     } catch (error: any) {
       logger.error('Export vendors error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to export vendors');

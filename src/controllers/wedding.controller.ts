@@ -46,6 +46,13 @@ const DEFAULT_FUNCTION_TITLES: Record<string, string> = {
   other: 'Function'
 };
 
+const publicPlannerFor = async (orgId?: mongoose.Types.ObjectId | null) => {
+  if (!orgId) return null;
+  const org = await Organization.findOne({ _id: orgId, status: 'active' }).select('name logoUrl brandColor limitsSnapshot contact.city showPoweredBy').lean();
+  if (!org?.limitsSnapshot?.whiteLabel) return null;
+  return { name: org.name, logoUrl: org.logoUrl, brandColor: org.brandColor, city: org.contact?.city, showPoweredBy: org.showPoweredBy !== false };
+};
+
 export class WeddingController {
   /**
    * GET /:weddingId/plan — the effective plan/limits currently in force for
@@ -778,7 +785,9 @@ export class WeddingController {
           venueAddress: wedding.venueAddress,
           accommodationInfo: wedding.accommodationInfo,
           pickupInfo: wedding.pickupInfo,
-          giftPolicy: wedding.giftPolicy
+          giftPolicy: wedding.giftPolicy,
+          // Track C: an agency on a white-label plan signs the page ("Planned by …").
+          planner: await publicPlannerFor(wedding.organizationId)
         }
       });
     } catch (error: any) {

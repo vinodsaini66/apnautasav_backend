@@ -9,6 +9,7 @@ import { uploadBufferToS3, deleteObjectFromS3ByUrl } from '../config/s3';
 import { sendExport, ExportColumn } from '../services/export.service';
 import logger from '../utils/logger';
 import { internalFilter } from '../services/access.service';
+import { exportBrandingFor } from '../services/org/org-branding';
 
 const BUDGET_EXPORT_COLUMNS: ExportColumn[] = [
     { key: 'category', label: 'Category' },
@@ -515,7 +516,7 @@ export class BudgetController {
                 vendor: b.vendor?.vendorName || ''
             }));
 
-            await sendExport(res, format as string, 'Budget', 'budget', rows, BUDGET_EXPORT_COLUMNS);
+            await sendExport(res, format as string, 'Budget', 'budget', rows, BUDGET_EXPORT_COLUMNS, await exportBrandingFor(req.access));
         } catch (error: any) {
             logger.error('Export budget error:', error);
             ApiResponse.error(res, 500, error.message || 'Failed to export budget');

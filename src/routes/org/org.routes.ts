@@ -85,6 +85,8 @@ router.post('/:orgId/templates/from-wedding/:weddingId', loadOrgMember, requireO
 
 router.get('/:orgId/billing', loadOrgMember, requireOrgPermission('org.billing'), OrgController.billing);
 router.post('/:orgId/billing/request', loadOrgMember, requireOrgPermission('org.billing'), validate(billingRequestSchema), OrgController.requestPlan);
+router.post('/:orgId/billing/pause', loadOrgMember, requireOrgPermission('org.billing'), OrgController.pausePlan);
+router.post('/:orgId/billing/resume', loadOrgMember, requireOrgPermission('org.billing'), OrgController.resumePlan);
 router.delete('/:orgId/billing/request', loadOrgMember, requireOrgPermission('org.billing'), OrgController.cancelPlanRequest);
 
 export default router;

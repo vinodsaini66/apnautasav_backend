@@ -167,6 +167,14 @@ export class OrgController {
     ApiResponse.success(res, 200, { message: 'Request sent', data: await OrgBillingService.request(membershipOf(req), req.body) });
   }, 'request plan');
 
+  static pausePlan = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { message: 'Plan paused', data: await OrgBillingService.pause(membershipOf(req)) });
+  }, 'pause plan');
+
+  static resumePlan = handle(async (req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { message: 'Welcome back', data: await OrgBillingService.resume(membershipOf(req)) });
+  }, 'resume plan');
+
   static cancelPlanRequest = handle(async (req: Request, res: Response) => {
     ApiResponse.success(res, 200, { message: 'Request withdrawn', data: await OrgBillingService.cancelRequest(membershipOf(req)) });
   }, 'cancel plan request');

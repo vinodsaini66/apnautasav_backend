@@ -31,6 +31,13 @@ export interface WeddingAccess {
     name: string;
     logoUrl?: string;
     brandColor?: string;
+    accentColor?: string;
+    /** The agency's plan includes white-label branding: its look replaces ApnaUtsav's for the family. */
+    whiteLabel: boolean;
+    /** Shown unless a white-label agency turned it off. */
+    showPoweredBy: boolean;
+    /** PDF exports carry the agency's name, logo and colour. */
+    brandedExports: boolean;
     /** Staff only: their org role and org-level permissions (budget.view, export, …). */
     role?: OrgRole;
     permissions?: ReadonlySet<OrgPermission>;
@@ -77,6 +84,10 @@ const resolveOrgWeddingAccess = async (userId: string, wedding: IWedding): Promi
     name: org.name,
     logoUrl: org.logoUrl,
     brandColor: org.brandColor,
+    accentColor: org.accentColor,
+    whiteLabel: !!org.limitsSnapshot?.whiteLabel,
+    showPoweredBy: !org.limitsSnapshot?.whiteLabel || org.showPoweredBy !== false,
+    brandedExports: !!org.limitsSnapshot?.brandedExports,
   };
 
   // 1. Agency staff. Owner/manager (weddings.viewAll) see every org wedding;
@@ -190,6 +201,9 @@ export const serializeAccess = (access: WeddingAccess) => ({
         name: access.org.name,
         logoUrl: access.org.logoUrl,
         brandColor: access.org.brandColor,
+        accentColor: access.org.accentColor,
+        whiteLabel: access.org.whiteLabel,
+        showPoweredBy: access.org.showPoweredBy,
         role: access.org.role,
         permissions: access.org.permissions ? [...access.org.permissions] : undefined,
         readOnly: access.org.readOnly,

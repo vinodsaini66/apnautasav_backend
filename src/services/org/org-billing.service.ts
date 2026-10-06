@@ -4,8 +4,8 @@ import { OrgMember } from '../../models/org/org-member.model';
 import { OrgPayment } from '../../models/org/org-payment.model';
 import { Wedding } from '../../models/wedding.model';
 import { User } from '../../models/user.model';
-import { ORG_PLANS, ORG_PLAN_KEYS, ORG_TRIAL_DAYS, OrgPlanKey } from '../../constants/org';
-import { OrgMembership, orgReadOnlyReason } from './org-access';
+import { ORG_MAX_PAUSE_DAYS, ORG_PLANS, ORG_PLAN_KEYS, ORG_TRIAL_DAYS, OrgPlanKey } from '../../constants/org';
+import { OrgMembership, membershipPermissions, orgReadOnlyReason } from './org-access';
 import { ACTIVE_ORG_WEDDING } from './org-wedding.service';
 import { serializeOrg, uniqueSlug } from './org.service';
 import { inviteLinkFor } from './org-member.service';
@@ -85,6 +85,40 @@ export class OrgBillingService {
     m.org.billingRequest = null;
     await m.org.save();
     return { billingRequest: null };
+  }
+
+  /**
+   * Off-season pause (PDF risk #8: better than cancelling). Everything goes
+   * read-only — staff and families can still see and export — and the paid
+   * period (or trial) is pushed back by the paused time on resume, up to
+   * ORG_MAX_PAUSE_DAYS. Owner/billing permission only.
+   */
+  static async pause(m: OrgMembership) {
+    const org = m.org;
+    if (org.planStatus === 'paused') throw badRequest('Your plan is already paused');
+    if (org.planStatus !== 'active' && org.planStatus !== 'trial') throw badRequest('Only an active plan or trial can be paused');
+    if (orgReadOnlyReason(org)) throw badRequest('Renew your plan first — it has already lapsed');
+    org.pausedFromStatus = org.planStatus;
+    org.pausedAt = new Date();
+    org.planStatus = 'paused';
+    await org.save();
+    return serializeOrg(org, m);
+  }
+
+  static async resume(m: OrgMembership) {
+    const org = m.org;
+    if (org.planStatus !== 'paused' || !org.pausedAt) throw badRequest('Your plan isn\'t paused');
+    const pausedMs = Math.min(Date.now() - new Date(org.pausedAt).getTime(), ORG_MAX_PAUSE_DAYS * DAY);
+    const shift = (d?: Date | null) => (d ? new Date(new Date(d).getTime() + pausedMs) : d);
+    org.planStatus = org.pausedFromStatus ?? 'active';
+    if (org.planStatus === 'trial') org.trialEndsAt = shift(org.trialEndsAt);
+    else org.currentPeriodEnd = shift(org.currentPeriodEnd);
+    org.pausedAt = null;
+    org.pausedFromStatus = null;
+    await org.save();
+    // Membership permissions were computed while read-only; recompute for the response.
+    const fresh = { ...m, readOnly: orgReadOnlyReason(org), permissions: membershipPermissions(m.member, orgReadOnlyReason(org)) };
+    return serializeOrg(org, fresh);
   }
 
   // ---- ApnaUtsav admin -------------------------------------------------------

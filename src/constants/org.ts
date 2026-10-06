@@ -205,3 +205,5 @@ export const ORG_TRIAL_DAYS = 30;
 /** Days after a paid period (or trial) ends before the org goes read-only. */
 export const ORG_GRACE_DAYS = 7;
 export const ORG_INVITE_TTL_DAYS = 14;
+/** The most a pause can push a paid period (or trial) back by. */
+export const ORG_MAX_PAUSE_DAYS = 120;
