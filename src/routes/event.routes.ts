@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import { EventController } from '../controllers/event.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
-import { checkWeddingAccess, checkPermission } from '../middleware/authorization.middleware';
+import { checkWeddingAccess, requirePermission } from '../middleware/authorization.middleware';
 import { validate } from '../middleware/validation.middleware';
 import { createEventSchema, updateEventSchema, addGuestsToEventSchema } from '../validators/event.validator';
-import { CollaboratorRole } from '../types';
 
 const router: Router = Router();
 
@@ -14,7 +13,7 @@ router.use(authMiddleware);
 router.post(
     '/:weddingId/events',
     checkWeddingAccess,
-    checkPermission(CollaboratorRole.EDITOR),
+    requirePermission('events.manage'),
     validate(createEventSchema),
     EventController.createEvent
 );
@@ -23,6 +22,7 @@ router.post(
 router.get(
     '/:weddingId/events',
     checkWeddingAccess,
+    requirePermission('events.view'),
     EventController.getEvents
 );
 
@@ -30,6 +30,7 @@ router.get(
 router.get(
     '/:weddingId/events/upcoming',
     checkWeddingAccess,
+    requirePermission('events.view'),
     EventController.getUpcomingEvents
 );
 
@@ -37,6 +38,7 @@ router.get(
 router.get(
     '/:weddingId/events/timeline',
     checkWeddingAccess,
+    requirePermission('events.view'),
     EventController.getEventTimeline
 );
 
@@ -44,6 +46,7 @@ router.get(
 router.get(
     '/:weddingId/events/stats',
     checkWeddingAccess,
+    requirePermission('events.view'),
     EventController.getEventStats
 );
 
@@ -51,6 +54,7 @@ router.get(
 router.get(
     '/:weddingId/events/:eventId',
     checkWeddingAccess,
+    requirePermission('events.view'),
     EventController.getEventById
 );
 
@@ -58,6 +62,7 @@ router.get(
 router.get(
     '/:weddingId/events/:eventId/stats',
     checkWeddingAccess,
+    requirePermission('events.view'),
     EventController.getEventStatsById
 );
 
@@ -65,6 +70,7 @@ router.get(
 router.get(
     '/:weddingId/events/:eventId/calendar.ics',
     checkWeddingAccess,
+    requirePermission('events.view'),
     EventController.getEventCalendar
 );
 
@@ -72,7 +78,7 @@ router.get(
 router.put(
     '/:weddingId/events/:eventId',
     checkWeddingAccess,
-    checkPermission(CollaboratorRole.EDITOR),
+    requirePermission('events.manage'),
     validate(updateEventSchema),
     EventController.updateEvent
 );
@@ -81,7 +87,7 @@ router.put(
 router.delete(
     '/:weddingId/events/:eventId',
     checkWeddingAccess,
-    checkPermission(CollaboratorRole.EDITOR),
+    requirePermission('events.manage'),
     EventController.deleteEvent
 );
 
@@ -89,7 +95,7 @@ router.delete(
 router.post(
     '/:weddingId/events/:eventId/guests',
     checkWeddingAccess,
-    checkPermission(CollaboratorRole.EDITOR),
+    requirePermission('events.manage'),
     validate(addGuestsToEventSchema),
     EventController.addGuestsToEvent
 );
@@ -98,7 +104,7 @@ router.post(
 router.delete(
     '/:weddingId/events/:eventId/guests/:guestId',
     checkWeddingAccess,
-    checkPermission(CollaboratorRole.EDITOR),
+    requirePermission('events.manage'),
     EventController.removeGuestFromEvent
 );
 

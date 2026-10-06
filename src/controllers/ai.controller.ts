@@ -116,7 +116,7 @@ export class AiController {
    *
    * Wedding-level authorization for the whole conversation is already
    * guaranteed by the route's middleware chain (checkWeddingAccess ->
-   * checkPermission(EDITOR) -> checkAiAssistantEnabled) — every tool below
+   * requirePermission('ai.use') -> checkAiAssistantEnabled) — every tool below
    * only replicates the narrower per-resource checks (validators, plan
    * resource limits) that the equivalent REST controller would run.
    */

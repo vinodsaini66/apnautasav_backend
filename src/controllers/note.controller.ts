@@ -3,18 +3,21 @@ import { SharedNote } from '../models/sharedNote.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import logger from '../utils/logger';
+import { internalFilter } from '../services/access.service';
 
 export class NoteController {
   static async createNote(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
       const userId = req.user?.userId;
-      const { title, content, tags, collaborators } = req.body;
+      const { title, content, tags, collaborators, isInternal } = req.body;
 
       const note = await SharedNote.create({
         weddingId,
         title,
         content,
+        // Only ever present for agency staff (stripped for everyone else in checkWeddingAccess).
+        isInternal: isInternal === true,
         createdBy: userId,
         tags: tags || [],
         collaborators: collaborators || []
@@ -46,7 +49,7 @@ export class NoteController {
       const { page = 1, limit = 50, search, tags } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
-      const filter: any = { weddingId };
+      const filter: any = { weddingId, ...internalFilter(req.access) };
 
       if (search) {
         filter.$or = [
@@ -80,9 +83,9 @@ export class NoteController {
     try {
       const { weddingId, noteId } = req.params;
       const userId = req.user?.userId;
-      const { title, content, tags, collaborators, isPinned } = req.body;
+      const { title, content, tags, collaborators, isPinned, isInternal } = req.body;
 
-      const note = await SharedNote.findOne({ _id: noteId, weddingId });
+      const note = await SharedNote.findOne({ _id: noteId, weddingId, ...internalFilter(req.access) });
 
       if (!note) {
         ApiResponse.error(res, 404, 'Note not found');
@@ -103,6 +106,7 @@ export class NoteController {
       if (tags) note.tags = tags;
       if (collaborators) note.collaborators = collaborators;
       if (isPinned !== undefined) note.isPinned = isPinned;
+      if (typeof isInternal === 'boolean') note.isInternal = isInternal;
 
       await note.save();
 
@@ -131,7 +135,7 @@ export class NoteController {
       const { weddingId, noteId } = req.params;
       const userId = req.user?.userId;
 
-      const note = await SharedNote.findOneAndDelete({ _id: noteId, weddingId });
+      const note = await SharedNote.findOneAndDelete({ _id: noteId, weddingId, ...internalFilter(req.access) });
 
       if (!note) {
         ApiResponse.error(res, 404, 'Note not found');

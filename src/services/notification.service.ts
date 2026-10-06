@@ -8,6 +8,7 @@ import { SMSService } from './sms.service';
 import { EmailService } from './email.service';
 import mongoose from 'mongoose';
 import logger from '../utils/logger';
+import { OrgMember } from '../models/org/org-member.model';
 
 // Maps a comment's entityType (see comment.controller.ts's COMMENT_ENTITY_TYPES)
 // to the frontend tab it lives on — app/wedding/[id]/<tab>, singular "wedding"
@@ -42,12 +43,23 @@ export class NotificationService {
    */
   static async getWeddingRecipientIds(weddingId: string, excludeUserId?: string): Promise<string[]> {
     const [wedding, collaborators] = await Promise.all([
-      Wedding.findById(weddingId).select('createdBy').lean(),
+      Wedding.findById(weddingId).select('createdBy organizationId orgAssignees').lean(),
       Collaborator.find({ weddingId, invitationStatus: 'accepted' }).select('userId').lean()
     ]);
 
     const recipientIds = new Set<string>();
-    if (wedding?.createdBy) recipientIds.add(String(wedding.createdBy));
+    if (wedding?.organizationId) {
+      // Agency-run wedding (Track C): the staff assigned to it, if they're
+      // still on the team — not the whole agency, and not createdBy (just
+      // whoever typed it in, who may have left).
+      const assigneeIds = (wedding.orgAssignees ?? []).map((a) => a.userId);
+      const active = assigneeIds.length
+        ? await OrgMember.find({ organizationId: wedding.organizationId, userId: { $in: assigneeIds }, status: 'active' }).select('userId').lean()
+        : [];
+      active.forEach((m) => recipientIds.add(String(m.userId)));
+    } else if (wedding?.createdBy) {
+      recipientIds.add(String(wedding.createdBy));
+    }
     collaborators.forEach((collaborator) => recipientIds.add(String(collaborator.userId)));
     if (excludeUserId) recipientIds.delete(String(excludeUserId));
 

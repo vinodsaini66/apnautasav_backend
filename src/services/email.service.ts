@@ -35,11 +35,43 @@ export class EmailService {
   }
 
   /**
+   * Brevo's HTTP API (port 443). Render's free instances block outbound SMTP
+   * ports 25/465/587, so nodemailer just times out (ETIMEDOUT on CONN) there.
+   * The sender in EMAIL_FROM must be a verified sender in the Brevo account.
+   */
+  private static async sendViaBrevo(to: string, subject: string, html: string): Promise<void> {
+    const from = process.env.EMAIL_FROM || 'noreply@apnautsav.com';
+    const match = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+    const sender = match ? { name: match[1] || 'ApnaUtsav', email: match[2] } : { name: 'ApnaUtsav', email: from.trim() };
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY as string,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({ sender, to: [{ email: to }], subject, htmlContent: html }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Brevo API ${response.status}: ${await response.text()}`);
+    }
+  }
+
+  /**
    * Generic send — never throws. Callers get a boolean back so a failed
    * email can never crash or block whatever triggered it.
    */
   static async sendMail(to: string, subject: string, html: string): Promise<boolean> {
     try {
+      if (process.env.BREVO_API_KEY) {
+        await this.sendViaBrevo(to, subject, html);
+        logger.info(`Email sent to ${to} via Brevo: "${subject}"`);
+        return true;
+      }
+
       const transporter = this.getTransporter();
       if (!transporter) {
         logger.warn(`SMTP not configured, email not sent to ${to} ("${subject}")`);

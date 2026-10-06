@@ -7,13 +7,11 @@ import { Budget } from '../models/budget.model';
 import { Vendor } from '../models/vendor.model';
 import { SharedNote } from '../models/sharedNote.model';
 import { WeddingEvent } from '../models/event.model';
-import { Wedding } from '../models/wedding.model';
-import { Collaborator } from '../models/collaborator.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { NotificationService } from '../services/notification.service';
 import { COMMENT_ENTITY_TYPES } from '../validators/comment.validator';
-import { CollaboratorRole } from '../types';
+import { hasPermission } from '../services/access.service';
 import logger from '../utils/logger';
 
 type CommentEntityType = typeof COMMENT_ENTITY_TYPES[number];
@@ -32,34 +30,6 @@ const ENTITY_MODEL_MAP: Record<CommentEntityType, mongoose.Model<any>> = {
 
 const isKnownEntityType = (entityType: string): entityType is CommentEntityType =>
   (COMMENT_ENTITY_TYPES as readonly string[]).includes(entityType);
-
-const ROLE_HIERARCHY: Record<CollaboratorRole, number> = {
-  [CollaboratorRole.VIEWER]: 1,
-  [CollaboratorRole.EDITOR]: 2,
-  [CollaboratorRole.ADMIN]: 3
-};
-
-/**
- * Whether `userId` has ADMIN rights on `weddingId` — the wedding creator, or
- * an accepted collaborator with role === 'admin'. Used by deleteComment so a
- * wedding admin/creator can moderate comments they didn't author themselves.
- */
-const hasAdminAccess = async (weddingId: string, userId: string): Promise<boolean> => {
-  const wedding = await Wedding.findById(weddingId);
-  if (!wedding) return false;
-
-  if (wedding.createdBy.toString() === userId) return true;
-
-  const collaborator = await Collaborator.findOne({
-    weddingId,
-    userId,
-    invitationStatus: 'accepted'
-  });
-
-  if (!collaborator) return false;
-
-  return ROLE_HIERARCHY[collaborator.role as CollaboratorRole] >= ROLE_HIERARCHY[CollaboratorRole.ADMIN];
-};
 
 export class CommentController {
   static async createComment(req: Request, res: Response): Promise<void> {
@@ -218,7 +188,8 @@ export class CommentController {
 
       const isAuthor = comment.authorId.toString() === userId;
       if (!isAuthor) {
-        const canOverride = await hasAdminAccess(weddingId, userId!);
+        // checkWeddingAccess already resolved the caller's access on this wedding.
+        const canOverride = !!req.access && hasPermission(req.access, 'comments.moderate');
         if (!canOverride) {
           ApiResponse.error(res, 403, 'You do not have permission to delete this comment');
           return;

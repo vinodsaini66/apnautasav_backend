@@ -1,6 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ITask extends Document {
+  // Track C: team-only on an agency-run wedding — never returned to the
+  // client family (see services/access.service.ts `internalFilter`).
+  isInternal?: boolean;
   weddingId: mongoose.Types.ObjectId;
   title: string;
   description?: string;
@@ -169,7 +172,11 @@ const taskSchema = new Schema<ITask>({
   dependsOn: [{
     type: Schema.Types.ObjectId,
     ref: 'Task'
-  }]
+  }],
+  isInternal: {
+    type: Boolean,
+    default: false
+  }
 }, {
   timestamps: true
 });

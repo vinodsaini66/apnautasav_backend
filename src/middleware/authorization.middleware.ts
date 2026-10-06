@@ -1,10 +1,47 @@
 import { Request, Response, NextFunction } from 'express';
-import { Wedding } from '../models/wedding.model';
-import { Collaborator } from '../models/collaborator.model';
 import { Task } from '../models/task.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ERROR_MESSAGES } from '../constants';
 import { CollaboratorRole } from '../types';
+import { WeddingPermission } from '../constants/permissions';
+import { resolveWeddingAccess, hasPermission, internalFilter, WeddingAccess } from '../services/access.service';
+import { installClientRedaction } from '../services/client-redaction';
+
+/**
+ * Resolves the caller's access to `req.params.weddingId` once per request and
+ * caches it on `req.access`. Later middleware (requirePermission,
+ * checkTaskAssigneeOrPermission) and controllers read the cache instead of
+ * re-querying Wedding/Collaborator.
+ */
+const loadAccess = async (req: Request, res: Response): Promise<WeddingAccess | null> => {
+  const { weddingId } = req.params;
+  if (req.access && req.access.weddingId === weddingId) return req.access;
+
+  const userId = req.user?.userId;
+  if (!userId) {
+    ApiResponse.error(res, 401, ERROR_MESSAGES.UNAUTHORIZED);
+    return null;
+  }
+
+  const result = await resolveWeddingAccess(userId, weddingId);
+  if (!result.ok) {
+    if (result.status === 404) ApiResponse.error(res, 404, ERROR_MESSAGES.WEDDING_NOT_FOUND);
+    else ApiResponse.error(res, 403, ERROR_MESSAGES.FORBIDDEN);
+    return null;
+  }
+
+  req.access = result.access;
+  req.weddingId = weddingId;
+
+  // "Team only" is an agency concept: only its staff may set or clear it.
+  // Dropped here, once, so no create/update handler can be fed it by a
+  // family member or client.
+  if (result.access.kind !== 'org' && req.body && typeof req.body === 'object' && 'isInternal' in req.body) {
+    delete req.body.isInternal;
+  }
+  if (result.access.kind === 'client') installClientRedaction(res, result.access);
+  return result.access;
+};
 
 export const checkWeddingAccess = async (
   req: Request,
@@ -12,89 +49,49 @@ export const checkWeddingAccess = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { weddingId } = req.params;
-    const userId = req.user?.userId;
-
-    if (!userId) {
-      ApiResponse.error(res, 401, ERROR_MESSAGES.UNAUTHORIZED);
-      return;
-    }
-
-    // Check if user is creator
-    const wedding = await Wedding.findById(weddingId);
-    
-    if (!wedding) {
-      ApiResponse.error(res, 404, ERROR_MESSAGES.WEDDING_NOT_FOUND);
-      return;
-    }
-
-    if (wedding.createdBy.toString() === userId) {
-      req.weddingId = weddingId;
-      next();
-      return;
-    }
-
-    // Check if user is collaborator
-    const collaborator = await Collaborator.findOne({
-      weddingId,
-      userId,
-      invitationStatus: 'accepted'
-    });
-
-    if (!collaborator) {
-      ApiResponse.error(res, 403, ERROR_MESSAGES.FORBIDDEN);
-      return;
-    }
-
-    req.weddingId = weddingId;
-    next();
+    if (await loadAccess(req, res)) next();
   } catch (error) {
     ApiResponse.error(res, 500, ERROR_MESSAGES.INTERNAL_ERROR);
   }
 };
 
-export const checkPermission = (requiredRole: CollaboratorRole) => {
+/** Requires every listed permission on the wedding in `req.params.weddingId`. */
+export const requirePermission = (...perms: WeddingPermission[]) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { weddingId } = req.params;
-      const userId = req.user?.userId;
+      const access = await loadAccess(req, res);
+      if (!access) return;
 
-      if (!userId) {
-        ApiResponse.error(res, 401, ERROR_MESSAGES.UNAUTHORIZED);
-        return;
-      }
-
-      const wedding = await Wedding.findById(weddingId);
-      
-      if (!wedding) {
-        ApiResponse.error(res, 404, ERROR_MESSAGES.WEDDING_NOT_FOUND);
-        return;
-      }
-
-      // Creator has all permissions
-      if (wedding.createdBy.toString() === userId) {
-        next();
-        return;
-      }
-
-      const collaborator = await Collaborator.findOne({
-        weddingId,
-        userId,
-        invitationStatus: 'accepted'
-      });
-
-      if (!collaborator) {
+      if (!hasPermission(access, ...perms)) {
         ApiResponse.error(res, 403, ERROR_MESSAGES.NO_PERMISSION);
         return;
       }
 
-      const roleHierarchy = {
-        [CollaboratorRole.VIEWER]: 1,
-        [CollaboratorRole.EDITOR]: 2,
-        [CollaboratorRole.ADMIN]: 3
-      };
+      next();
+    } catch (error) {
+      ApiResponse.error(res, 500, ERROR_MESSAGES.INTERNAL_ERROR);
+    }
+  };
+};
 
-      if (roleHierarchy[collaborator.role] < roleHierarchy[requiredRole]) {
+const ROLE_RANK: Record<CollaboratorRole, number> = {
+  [CollaboratorRole.VIEWER]: 1,
+  [CollaboratorRole.EDITOR]: 2,
+  [CollaboratorRole.ADMIN]: 3
+};
+
+/**
+ * @deprecated Use `requirePermission(...)` — routes should say *what* they
+ * need, not which collaborator role used to imply it. Kept so any route not
+ * yet migrated keeps its old behaviour.
+ */
+export const checkPermission = (requiredRole: CollaboratorRole) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const access = await loadAccess(req, res);
+      if (!access) return;
+
+      if (ROLE_RANK[access.role] < ROLE_RANK[requiredRole]) {
         ApiResponse.error(res, 403, ERROR_MESSAGES.NO_PERMISSION);
         return;
       }
@@ -107,9 +104,9 @@ export const checkPermission = (requiredRole: CollaboratorRole) => {
 };
 
 /**
- * Platform-level admin check (as opposed to `checkPermission`, which is
- * scoped to a single wedding's collaborators). Used for content that isn't
- * tied to any one wedding — e.g. promotional dashboard banners.
+ * Platform-level admin check (as opposed to `requirePermission`, which is
+ * scoped to a single wedding). Used for content that isn't tied to any one
+ * wedding — e.g. promotional dashboard banners.
  */
 export const requireAdmin = (
   req: Request,
@@ -124,22 +121,18 @@ export const requireAdmin = (
   next();
 };
 
-// Like checkPermission, but also allows through a user who is the task's
-// assignee, regardless of their base collaborator role (e.g. a 'viewer' who
-// was assigned the task can still update it). Loads the Task once and
-// attaches it to req.task so the controller doesn't have to re-fetch it.
-export const checkTaskAssigneeOrPermission = (requiredRole: CollaboratorRole) => {
+// Like requirePermission, but also allows through a user who is the task's
+// assignee, regardless of their permissions (e.g. a 'viewer' who was assigned
+// the task can still update it). Loads the Task once and attaches it to
+// req.task so the controller doesn't have to re-fetch it.
+export const checkTaskAssigneeOrPermission = (...perms: WeddingPermission[]) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const access = await loadAccess(req, res);
+      if (!access) return;
+
       const { weddingId, taskId } = req.params;
-      const userId = req.user?.userId;
-
-      if (!userId) {
-        ApiResponse.error(res, 401, ERROR_MESSAGES.UNAUTHORIZED);
-        return;
-      }
-
-      const task = await Task.findOne({ _id: taskId, weddingId });
+      const task = await Task.findOne({ _id: taskId, weddingId, ...internalFilter(access) });
 
       if (!task) {
         ApiResponse.error(res, 404, 'Task not found');
@@ -148,49 +141,15 @@ export const checkTaskAssigneeOrPermission = (requiredRole: CollaboratorRole) =>
 
       req.task = task;
 
+      const userId = req.user!.userId;
       const isAssignee = task.assignedTo?.some((id: any) => id.toString() === userId);
 
-      if (isAssignee) {
+      if (isAssignee || hasPermission(access, ...perms)) {
         next();
         return;
       }
 
-      const wedding = await Wedding.findById(weddingId);
-
-      if (!wedding) {
-        ApiResponse.error(res, 404, ERROR_MESSAGES.WEDDING_NOT_FOUND);
-        return;
-      }
-
-      // Creator has all permissions
-      if (wedding.createdBy.toString() === userId) {
-        next();
-        return;
-      }
-
-      const collaborator = await Collaborator.findOne({
-        weddingId,
-        userId,
-        invitationStatus: 'accepted'
-      });
-
-      if (!collaborator) {
-        ApiResponse.error(res, 403, ERROR_MESSAGES.NO_PERMISSION);
-        return;
-      }
-
-      const roleHierarchy = {
-        [CollaboratorRole.VIEWER]: 1,
-        [CollaboratorRole.EDITOR]: 2,
-        [CollaboratorRole.ADMIN]: 3
-      };
-
-      if (roleHierarchy[collaborator.role] < roleHierarchy[requiredRole]) {
-        ApiResponse.error(res, 403, ERROR_MESSAGES.NO_PERMISSION);
-        return;
-      }
-
-      next();
+      ApiResponse.error(res, 403, ERROR_MESSAGES.NO_PERMISSION);
     } catch (error) {
       ApiResponse.error(res, 500, ERROR_MESSAGES.INTERNAL_ERROR);
     }

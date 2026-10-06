@@ -305,24 +305,27 @@ export class AuthService {
 
     await user.save();
 
-    if (email) {
-      const invitations = await collaborationInvitation.find({
-        email,
-      });
-      if (invitations.length > 0) {
-        invitations.forEach(async (invitation) => {
-          const invitationCode = generateInvitationCode();
+    // Turn wedding invites sent to this email before the person had an
+    // account into pending Collaborator rows (accepted from the dashboard).
+    // Awaited one at a time; a failing invite (e.g. they were since added
+    // another way — unique weddingId+userId) is logged, never thrown, so a
+    // bad invite can't block login.
+    for (const invitation of await collaborationInvitation.find({ email: user.email })) {
+      try {
+        const exists = await Collaborator.exists({ weddingId: invitation.weddingId, userId: user._id });
+        if (!exists) {
           await Collaborator.create({
             weddingId: invitation.weddingId,
-            name: fullName,
             userId: user._id,
             role: invitation.role,
             invitedBy: invitation.invitedBy,
-            invitationCode,
+            invitationCode: generateInvitationCode(),
             invitationStatus: 'pending'
           });
-          await collaborationInvitation.findByIdAndDelete(invitation._id);
-        });
+        }
+        await collaborationInvitation.findByIdAndDelete(invitation._id);
+      } catch (error) {
+        logger.error(`Failed to convert collaboration invitation ${invitation._id}:`, error);
       }
     }
 

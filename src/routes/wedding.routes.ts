@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { WeddingController } from '../controllers/wedding.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
-import { checkWeddingAccess, checkPermission } from '../middleware/authorization.middleware';
+import { checkWeddingAccess, requirePermission } from '../middleware/authorization.middleware';
 import { checkWeddingCreationLimit } from '../middleware/planLimit.middleware';
 import { validate } from '../middleware/validation.middleware';
 import { imageUpload } from '../middleware/upload.middleware';
+import { updateClientAccessSchema } from '../validators/client-access.validator';
 import { createWeddingSchema, updateWeddingSchema, joinWeddingSchema, updatePublicSettingsSchema } from '../validators/wedding.validator';
-import { CollaboratorRole } from '../types';
 
 const router: Router = Router();
 
@@ -29,15 +29,17 @@ router.get('/invitations', WeddingController.getWeddingInvitation);
 router.put('/invite/:inviteId', WeddingController.updateWeddingInvitation);
 router.post('/join', validate(joinWeddingSchema), WeddingController.joinWedding);
 router.get('/:weddingId', checkWeddingAccess, WeddingController.getWeddingById);
+router.get('/:weddingId/access', checkWeddingAccess, WeddingController.getAccess);
+router.patch('/:weddingId/client-access', checkWeddingAccess, requirePermission('collaborators.manage'), validate(updateClientAccessSchema), WeddingController.updateClientAccess);
 router.get('/:weddingId/plan', checkWeddingAccess, WeddingController.getWeddingPlan);
-router.put('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), validate(updateWeddingSchema), WeddingController.updateWedding);
-router.post('/:weddingId/image', checkWeddingAccess, checkPermission(CollaboratorRole.EDITOR), imageUpload.single('image'), WeddingController.uploadImage);
-router.delete('/:weddingId', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), WeddingController.deleteWedding);
+router.put('/:weddingId', checkWeddingAccess, requirePermission('wedding.edit'), validate(updateWeddingSchema), WeddingController.updateWedding);
+router.post('/:weddingId/image', checkWeddingAccess, requirePermission('wedding.edit'), imageUpload.single('image'), WeddingController.uploadImage);
+router.delete('/:weddingId', checkWeddingAccess, requirePermission('wedding.delete'), WeddingController.deleteWedding);
 router.get('/:weddingId/stats', checkWeddingAccess, WeddingController.getWeddingStats);
 router.get('/:weddingId/console', checkWeddingAccess, WeddingController.getConsoleOverview);
-router.put('/:weddingId/public-settings', checkWeddingAccess, checkPermission(CollaboratorRole.ADMIN), validate(updatePublicSettingsSchema), WeddingController.updatePublicSettings);
-router.get('/:weddingId/search', checkWeddingAccess, WeddingController.globalSearch);
+router.put('/:weddingId/public-settings', checkWeddingAccess, requirePermission('wedding.settings'), validate(updatePublicSettingsSchema), WeddingController.updatePublicSettings);
+router.get('/:weddingId/search', checkWeddingAccess, requirePermission('guests.view', 'tasks.view', 'vendors.view', 'events.view'), WeddingController.globalSearch);
 router.get('/:weddingId/recommended-vendors', checkWeddingAccess, WeddingController.getRecommendedVendors);
-router.get('/:weddingId/calendar.ics', checkWeddingAccess, WeddingController.getWeddingCalendar);
+router.get('/:weddingId/calendar.ics', checkWeddingAccess, requirePermission('events.view'), WeddingController.getWeddingCalendar);
 
 export default router;

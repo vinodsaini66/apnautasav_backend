@@ -11,6 +11,9 @@ import { uploadBufferToS3, deleteObjectFromS3ByUrl } from '../config/s3';
 import logger from '../utils/logger';
 import { WeddingVendorCategory, mapMarketplaceCategoryToVendorCategory } from '../utils/vendorCategoryMapping';
 import { sendExport, ExportColumn } from '../services/export.service';
+import { internalFilter, hasPermission } from '../services/access.service';
+import { PlanResolutionService, UNLIMITED } from '../services/plan-resolution.service';
+import { cleanVendorRow, ImportRowResult, MAX_IMPORT_ROWS, VendorImportRow, vendorKey } from '../services/vendor-import.service';
 
 const VENDOR_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'vendorName', label: 'Vendor Name' },
@@ -61,7 +64,7 @@ export class VendorController {
       const { page = 1, limit = 50, category, bookingStatus, eventId } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
-      const filter: any = { weddingId };
+      const filter: any = { weddingId, ...internalFilter(req.access) };
 
       if (category) filter.category = category;
       if (bookingStatus) filter.bookingStatus = bookingStatus;
@@ -76,7 +79,14 @@ export class VendorController {
 
       const total = await Vendor.countDocuments(filter);
 
-      ApiResponse.paginated(res, vendors, Number(page), Number(limit), total);
+      // A client who may only see the basics gets names, categories and
+      // contacts — not what was agreed or written down about the vendor
+      // (costs/terms/contracts are blanked by services/client-redaction.ts).
+      const visible = req.access && !hasPermission(req.access, 'vendors.details')
+        ? vendors.map(({ notes: _notes, ...rest }: any) => rest)
+        : vendors;
+
+      ApiResponse.paginated(res, visible, Number(page), Number(limit), total);
     } catch (error: any) {
       logger.error('Get vendors error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to fetch vendors');
@@ -366,6 +376,96 @@ export class VendorController {
   }
 
   /**
+   * POST /:weddingId/vendors/bulk-import — `{ rows, dryRun? }`. The frontend
+   * parses the CSV; each row is validated here and reported back. Vendors
+   * already on the wedding (same phone or name) are skipped. Respects the
+   * wedding's vendor limit. Agency staff also need the `import` permission.
+   */
+  static async bulkImportVendors(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const userId = req.user!.userId;
+      const access = req.access!;
+      if (access.kind === 'org' && !access.org?.permissions?.has('import')) {
+        ApiResponse.error(res, 403, 'You do not have permission to import');
+        return;
+      }
+
+      const rows: VendorImportRow[] = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      const dryRun = req.body?.dryRun === true;
+      if (rows.length === 0 || rows.length > MAX_IMPORT_ROWS) {
+        ApiResponse.error(res, 400, `Send between 1 and ${MAX_IMPORT_ROWS} rows`);
+        return;
+      }
+
+      const ownerId = await PlanResolutionService.getWeddingOwner(weddingId);
+      const effective = await PlanResolutionService.getEffectivePlanForWedding(ownerId!, weddingId);
+      const usage = await PlanResolutionService.getCurrentUsage(weddingId);
+      let room = effective.limits.vendors === UNLIMITED ? Infinity : Math.max(0, effective.limits.vendors - usage.vendors);
+
+      const existing = await Vendor.find({ weddingId }).select('vendorName phoneNumber').lean();
+      const taken = new Set(existing.flatMap((v) => {
+        const k = vendorKey(v.vendorName, v.phoneNumber || '');
+        return [`n:${k.name}`, ...(k.phone ? [`p:${k.phone}`] : [])];
+      }));
+
+      const results: ImportRowResult[] = [];
+      const toCreate: Record<string, unknown>[] = [];
+      rows.forEach((raw, i) => {
+        const { row, error } = cleanVendorRow(raw);
+        if (!row) {
+          results.push({ row: i + 1, name: String(raw?.name ?? ''), ok: false, error });
+          return;
+        }
+        const k = vendorKey(row.name, row.phone);
+        if (taken.has(`n:${k.name}`) || (k.phone && taken.has(`p:${k.phone}`))) {
+          results.push({ row: i + 1, name: row.name, ok: false, skipped: true, error: 'Already on this wedding' });
+          return;
+        }
+        if (room <= 0) {
+          results.push({ row: i + 1, name: row.name, ok: false, error: `Plan vendor limit (${effective.limits.vendors}) reached` });
+          return;
+        }
+        room -= 1;
+        taken.add(`n:${k.name}`).add(`p:${k.phone}`);
+        results.push({ row: i + 1, name: row.name, ok: true });
+        toCreate.push({
+          weddingId,
+          vendorName: row.name,
+          category: row.category,
+          phoneNumber: row.phone,
+          contactPerson: row.contactPerson,
+          email: row.email,
+          website: row.website,
+          notes: row.notes,
+          estimatedCost: row.price,
+          bookingStatus: 'inquiry',
+          addedBy: userId
+        });
+      });
+
+      if (!dryRun && toCreate.length) {
+        await Vendor.insertMany(toCreate);
+        await ActivityService.logActivity({
+          weddingId,
+          userId,
+          actionType: 'created',
+          entityType: 'vendor',
+          description: `Imported ${toCreate.length} vendor${toCreate.length === 1 ? '' : 's'} from a spreadsheet`
+        });
+      }
+
+      ApiResponse.success(res, dryRun ? 200 : 201, {
+        message: dryRun ? 'Checked' : `Imported ${toCreate.length} vendor${toCreate.length === 1 ? '' : 's'}`,
+        data: { dryRun, created: dryRun ? 0 : toCreate.length, valid: toCreate.length, results }
+      });
+    } catch (error: any) {
+      logger.error('Bulk import vendors error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to import vendors');
+    }
+  }
+
+  /**
    * GET /:weddingId/vendors/export?format=csv|pdf — full (unpaginated)
    * list for this wedding, using getVendors' own filters.
    */
@@ -374,7 +474,7 @@ export class VendorController {
       const { weddingId } = req.params;
       const { category, bookingStatus, eventId, format } = req.query;
 
-      const filter: any = { weddingId };
+      const filter: any = { weddingId, ...internalFilter(req.access) };
       if (category) filter.category = category;
       if (bookingStatus) filter.bookingStatus = bookingStatus;
       if (eventId) filter.eventIds = eventId;
