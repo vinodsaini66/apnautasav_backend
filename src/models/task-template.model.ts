@@ -18,22 +18,24 @@ export interface ITaskTemplateItem {
   // silently left untagged (the task is still created) if no such event
   // exists yet on that wedding.
   eventType?: string;
+  // Track C (agency templates): who the created task goes to on a client
+  // wedding — the wedding's lead planner, or everyone on its planning team
+  // with that agency role. Ignored on family weddings.
+  assigneeRole?: 'lead' | 'manager' | 'coordinator';
+  // Track C: create the task as "Team only" (never shown to the family).
+  isInternal?: boolean;
 }
 
 export interface ITaskTemplate extends Document {
   name: string;
   description?: string;
-  // Owner of a custom (non-system) template. Deliberately scoped to a
-  // USER, not a single wedding — a family reuses their own template across
-  // however many weddings they create, and this is the same shape a
-  // wedding-planner Organization account will reuse later once Track C
-  // (multi-tenant planner accounts, see B2B_WhiteLabel_Planner_Plan.md)
-  // ships: whoever creates a template owns it, and it follows them across
-  // every wedding they work on — not locked to one. No separate
-  // "org-scoped" template type is needed today; when Organization accounts
-  // exist, an org's templates are simply the templates its owner/staff
-  // user already created.
+  // Who made a custom (non-system) template. A personal template follows
+  // its creator across every wedding they work on.
   createdBy?: mongoose.Types.ObjectId;
+  // Track C: set for an agency's shared template — usable by its staff
+  // (templates.apply) on the agency's client weddings, edited by staff with
+  // templates.manage. Unset = a personal or system template, as before.
+  organizationId?: mongoose.Types.ObjectId | null;
   // System/preset templates (seeded — see scripts/seed.ts) are visible to
   // every user and read-only via the API (no createdBy, can't be
   // edited/deleted through TaskTemplateController). `key` is only set on
@@ -75,6 +77,14 @@ const taskTemplateItemSchema = new Schema<ITaskTemplateItem>(
     eventType: {
       type: String,
       enum: ['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other']
+    },
+    assigneeRole: {
+      type: String,
+      enum: ['lead', 'manager', 'coordinator']
+    },
+    isInternal: {
+      type: Boolean,
+      default: false
     }
   },
   { _id: false }
@@ -97,6 +107,11 @@ const taskTemplateSchema = new Schema<ITaskTemplate>(
       type: Schema.Types.ObjectId,
       ref: 'User'
     },
+    organizationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Organization',
+      default: undefined
+    },
     isSystemTemplate: {
       type: Boolean,
       default: false
@@ -118,6 +133,7 @@ const taskTemplateSchema = new Schema<ITaskTemplate>(
 );
 
 taskTemplateSchema.index({ createdBy: 1 });
+taskTemplateSchema.index({ organizationId: 1 }, { sparse: true });
 taskTemplateSchema.index({ isSystemTemplate: 1 });
 
 export const TaskTemplate = mongoose.model<ITaskTemplate>('TaskTemplate', taskTemplateSchema);

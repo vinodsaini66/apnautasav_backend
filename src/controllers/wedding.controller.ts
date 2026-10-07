@@ -20,6 +20,13 @@ import { ApiResponse } from '../utils/apiResponse';
 import { uploadBufferToS3, deleteObjectFromS3ByUrl } from '../config/s3';
 import { ActivityService } from '../services/activity.service';
 import { PlanResolutionService } from '../services/plan-resolution.service';
+import { serializeAccess, internalFilter, hasPermission } from '../services/access.service';
+import { effectiveClientAccess, clientPermissions, normaliseClientAccess } from '../constants/client-access';
+import { scrubWithPermissions } from '../services/client-redaction';
+import { CollaboratorRole } from '../types';
+import { OrgWeddingService } from '../services/org/org-wedding.service';
+import { Organization } from '../models/org/organization.model';
+import { OrgError } from '../utils/org';
 import { computeWeddingStats, getWeddingFunctionsSummary, getConsoleOverview } from '../services/wedding-stats.service';
 import { buildEventAttributes, buildWeddingDayEventAttributes, generateICS } from '../services/calendar.service';
 import logger from '../utils/logger';
@@ -37,6 +44,13 @@ const DEFAULT_FUNCTION_TITLES: Record<string, string> = {
   // marketing site's journey timeline, which both already call it that.
   ceremony: 'Pheras',
   other: 'Function'
+};
+
+const publicPlannerFor = async (orgId?: mongoose.Types.ObjectId | null) => {
+  if (!orgId) return null;
+  const org = await Organization.findOne({ _id: orgId, status: 'active' }).select('name logoUrl brandColor limitsSnapshot contact.city showPoweredBy').lean();
+  if (!org?.limitsSnapshot?.whiteLabel) return null;
+  return { name: org.name, logoUrl: org.logoUrl, brandColor: org.brandColor, city: org.contact?.city, showPoweredBy: org.showPoweredBy !== false };
 };
 
 export class WeddingController {
@@ -83,9 +97,29 @@ export class WeddingController {
       const userId = req.user?.userId;
       const { brideName, groomName, weddingDate, location, totalBudget, currency, description, imageUrl, name, functions } = req.body;
 
+      // Track C: a planner creating a wedding for a client. Checks the caller
+      // may create weddings for that org and that its plan has room; the
+      // org's staff then reach it through membership, not createdBy.
+      let orgFields: Awaited<ReturnType<typeof OrgWeddingService.prepareCreate>> | null = null;
+      if (req.body.organizationId) {
+        try {
+          orgFields = await OrgWeddingService.prepareCreate(userId!, req.body.organizationId, {
+            assignees: req.body.assignees,
+            clientContact: req.body.clientContact
+          });
+        } catch (error) {
+          if (error instanceof OrgError) {
+            ApiResponse.error(res, error.statusCode, error.message, error.details);
+            return;
+          }
+          throw error;
+        }
+      }
+
       const weddingCode = generateWeddingCode();
 
       const wedding = await Wedding.create({
+        ...(orgFields ?? {}),
         weddingCode,
         name,
         brideName,
@@ -159,10 +193,14 @@ export class WeddingController {
         filter.status = status;
       }
 
-      // Get weddings created by user
+      // Get weddings created by user. Weddings a planner created for an
+      // agency's client live in that agency's portfolio (GET /orgs/:id/weddings),
+      // not in their personal list — `organizationId: null` also matches
+      // every family wedding, which never has the field.
       const createdWeddings = await Wedding.find({
         ...filter,
-        createdBy: userId
+        createdBy: userId,
+        organizationId: null
       })
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -185,6 +223,19 @@ export class WeddingController {
         .sort({ createdAt: -1 })
         .lean();
 
+      const clientDefaults = new Map<string, any>();
+      // A client family sees whose agency runs their wedding ("Managed by …").
+      const orgIds = [...new Set(collaboratorWeddings.map((w: any) => w.organizationId).filter(Boolean).map(String))];
+      if (orgIds.length) {
+        const orgs = await Organization.find({ _id: { $in: orgIds } }).select('name logoUrl brandColor settings').lean();
+        const orgById = new Map(orgs.map((o) => [String(o._id), o]));
+        orgs.forEach((o) => clientDefaults.set(String(o._id), o.settings?.defaultClientAccess));
+        for (const w of collaboratorWeddings as any[]) {
+          const org = w.organizationId ? orgById.get(String(w.organizationId)) : undefined;
+          if (org) w.organization = { id: String(org._id), name: org.name, logoUrl: org.logoUrl, brandColor: org.brandColor };
+        }
+      }
+
       const allWeddings = [...createdWeddings, ...collaboratorWeddings];
       const total = allWeddings.length;
 
@@ -202,13 +253,19 @@ export class WeddingController {
         allWeddings.map(async (wedding: any) => {
           const isOwner = String(wedding.createdBy) === String(userId);
           const role = isOwner ? 'owner' : roleByWeddingId.get(String(wedding._id)) || 'viewer';
+          // A client family on an agency wedding (Track C) gets the same
+          // view of the numbers here as inside the wedding.
+          const isClient = !isOwner && !!wedding.organizationId;
 
           const [summary, functionsSummary] = await Promise.all([
-            computeWeddingStats(String(wedding._id), wedding.totalBudget || 0),
+            computeWeddingStats(String(wedding._id), wedding.totalBudget || 0, { excludeInternal: isClient }),
             getWeddingFunctionsSummary(String(wedding._id)),
           ]);
 
-          return { ...wedding, role, summary, functionsSummary };
+          const card = { ...wedding, role, summary, functionsSummary };
+          if (!isClient) return card;
+          const settings = effectiveClientAccess(wedding.clientAccess, clientDefaults.get(String(wedding.organizationId)));
+          return scrubWithPermissions(card, clientPermissions(role as CollaboratorRole, settings.sections));
         })
       );
 
@@ -259,7 +316,7 @@ export class WeddingController {
         Guest.countDocuments({ weddingId }),
         Task.countDocuments({ weddingId }),
         Budget.aggregate([
-          { $match: { weddingId: new mongoose.Types.ObjectId(weddingId as any), status: 'paid' } },
+          { $match: { weddingId: new mongoose.Types.ObjectId(weddingId as any), status: 'paid', ...internalFilter(req.access) } },
           { $group: { _id: null, total: { $sum: '$actualCost' } } }
         ]).then(result => result[0]?.total || 0)
       ]); // Placeholder for any future parallel operations
@@ -395,42 +452,98 @@ export class WeddingController {
     try {
       const { inviteId } = req.params;
       const userId = req.user?.userId;
-      const updateData = {
-        invitationStatus : req.body.status ?? 'pending',
+      const status = req.body.status;
+
+      if (status !== 'accepted' && status !== 'rejected') {
+        ApiResponse.error(res, 400, "status must be 'accepted' or 'rejected'");
+        return;
       }
-      console.log({ updateData });
 
-
-      const wedding = await Collaborator.findByIdAndUpdate(
-        inviteId,
-        { $set: updateData },
-        { new: true, runValidators: true }
-      );
-
-      if (!wedding) {
+      if (!mongoose.isValidObjectId(inviteId)) {
         ApiResponse.error(res, 404, 'Invitation not found');
         return;
       }
 
-      // Log activity
+      // Scoped to the caller: an invite can only be answered by the user it
+      // was sent to. (Previously any logged-in user could accept any invite
+      // by its id and gain access to someone else's wedding.)
+      const collaborator = await Collaborator.findOneAndUpdate(
+        { _id: inviteId, userId },
+        { $set: { invitationStatus: status } },
+        { new: true, runValidators: true }
+      );
+
+      if (!collaborator) {
+        ApiResponse.error(res, 404, 'Invitation not found');
+        return;
+      }
+
       await ActivityService.logActivity({
-        weddingId: String(wedding._id),
+        weddingId: String(collaborator.weddingId),
         userId: userId!,
         actionType: 'updated',
         entityType: 'collaborator',
-        entityId: String(wedding._id),
-        entityName: `Collaborator for wedding ${wedding.weddingId}`,
-        description: 'Updated collaborator details'
+        entityId: String(collaborator._id),
+        entityName: `Collaborator for wedding ${collaborator.weddingId}`,
+        description: status === 'accepted' ? 'Accepted the invitation' : 'Declined the invitation'
       });
 
       ApiResponse.success(res, 200, {
         message: 'Collaborator updated successfully',
-        data: wedding
+        data: collaborator
       });
     } catch (error: any) {
-      logger.error('Update wedding error:', error);
-      ApiResponse.error(res, 500, error.message || 'Failed to update wedding');
+      logger.error('Update wedding invitation error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to update invitation');
     }
+  }
+
+  /**
+   * PATCH /weddings/:weddingId/client-access — Track C: what the client
+   * family sees on this agency wedding (sections, preset, join-by-code).
+   * Agency staff with client.manage only; `{ reset: true }` goes back to the
+   * agency default.
+   */
+  static async updateClientAccess(req: Request, res: Response): Promise<void> {
+    try {
+      const access = req.access!;
+      if (access.kind !== 'org') {
+        ApiResponse.error(res, 403, 'Only the planning agency can change what the family sees');
+        return;
+      }
+      const wedding = access.wedding;
+      const org = await Organization.findById(wedding.organizationId).select('settings').lean();
+      const agencyDefault = org?.settings?.defaultClientAccess;
+
+      wedding.clientAccess = req.body.reset ? undefined : normaliseClientAccess(req.body, effectiveClientAccess(wedding.clientAccess, agencyDefault));
+      await wedding.save();
+
+      await ActivityService.logActivity({
+        weddingId: String(wedding._id),
+        userId: req.user!.userId,
+        actionType: 'updated',
+        entityType: 'wedding',
+        entityId: String(wedding._id),
+        description: 'Changed what the family can see'
+      });
+
+      ApiResponse.success(res, 200, {
+        message: 'Saved',
+        data: { clientAccess: effectiveClientAccess(wedding.clientAccess, agencyDefault), isDefault: !wedding.clientAccess }
+      });
+    } catch (error: any) {
+      logger.error('Update client access error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to save');
+    }
+  }
+
+  /**
+   * GET /weddings/:weddingId/access — who the caller is on this wedding and
+   * which permissions they hold (see constants/permissions.ts). The frontend
+   * gates buttons/tabs on this instead of re-deriving roles itself.
+   */
+  static async getAccess(req: Request, res: Response): Promise<void> {
+    ApiResponse.success(res, 200, { data: serializeAccess(req.access!) });
   }
 
   static async deleteWedding(req: Request, res: Response): Promise<void> {
@@ -502,6 +615,17 @@ export class WeddingController {
         return;
       }
 
+      // Agency-run weddings (Track C): the planner decides whether the code
+      // works at all — off by default, so only invited family get in.
+      if (wedding.organizationId) {
+        const org = await Organization.findById(wedding.organizationId).select('settings').lean();
+        const { allowJoinByCode } = effectiveClientAccess(wedding.clientAccess, org?.settings?.defaultClientAccess);
+        if (!allowJoinByCode) {
+          ApiResponse.error(res, 403, 'This wedding is managed by a planner. Ask them to invite you.', { code: 'JOIN_BY_CODE_DISABLED' });
+          return;
+        }
+      }
+
       // Add as collaborator. Join-by-code is instant (no approval step), so
       // default to the least-privileged role — a wedding admin can promote
       // the collaborator afterwards via the collaborator management screen.
@@ -540,7 +664,9 @@ export class WeddingController {
       const { weddingId } = req.params;
 
       const wedding = await Wedding.findById(weddingId).select('totalBudget');
-      const stats = await computeWeddingStats(weddingId, wedding?.totalBudget || 0);
+      const stats = await computeWeddingStats(weddingId, wedding?.totalBudget || 0, {
+        excludeInternal: req.access?.kind === 'client'
+      });
 
       ApiResponse.success(res, 200, { data: stats });
     } catch (error: any) {
@@ -556,7 +682,7 @@ export class WeddingController {
   static async getConsoleOverview(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const overview = await getConsoleOverview(weddingId);
+      const overview = await getConsoleOverview(weddingId, { excludeInternal: req.access?.kind === 'client' });
       ApiResponse.success(res, 200, { data: overview });
     } catch (error: any) {
       logger.error('Get console overview error:', error);
@@ -659,7 +785,9 @@ export class WeddingController {
           venueAddress: wedding.venueAddress,
           accommodationInfo: wedding.accommodationInfo,
           pickupInfo: wedding.pickupInfo,
-          giftPolicy: wedding.giftPolicy
+          giftPolicy: wedding.giftPolicy,
+          // Track C: an agency on a white-label plan signs the page ("Planned by …").
+          planner: await publicPlannerFor(wedding.organizationId)
         }
       });
     } catch (error: any) {
@@ -712,21 +840,23 @@ export class WeddingController {
       }
 
       const regex = { $regex: q, $options: 'i' };
+      // Clients never see team-only items, and only see budget lines with budget.view.
+      const hidden = internalFilter(req.access);
+      const canSeeBudget = !req.access || hasPermission(req.access, 'budget.view');
 
       const [guests, tasks, budgetItems, vendors, events, notes] = await Promise.all([
         Guest.find({ weddingId, $or: [{ name: regex }, { email: regex }, { phoneNumber: regex }] })
           .select('name category')
           .limit(5)
           .lean(),
-        Task.find({ weddingId, $or: [{ title: regex }, { description: regex }] })
+        Task.find({ weddingId, ...hidden, $or: [{ title: regex }, { description: regex }] })
           .select('title status')
           .limit(5)
           .lean(),
-        Budget.find({ weddingId, description: regex })
-          .select('description category')
-          .limit(5)
-          .lean(),
-        Vendor.find({ weddingId, vendorName: regex })
+        canSeeBudget
+          ? Budget.find({ weddingId, ...hidden, description: regex }).select('description category').limit(5).lean()
+          : Promise.resolve([] as any[]),
+        Vendor.find({ weddingId, ...hidden, vendorName: regex })
           .select('vendorName category')
           .limit(5)
           .lean(),
@@ -734,7 +864,7 @@ export class WeddingController {
           .select('title eventType')
           .limit(5)
           .lean(),
-        SharedNote.find({ weddingId, $or: [{ title: regex }, { content: regex }] })
+        SharedNote.find({ weddingId, ...hidden, $or: [{ title: regex }, { content: regex }] })
           .select('title content')
           .limit(5)
           .lean()

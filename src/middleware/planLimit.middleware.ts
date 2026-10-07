@@ -9,7 +9,7 @@ type CountableResource = 'guests' | 'tasks' | 'vendors' | 'collaborators';
 /**
  * Gate a wedding-scoped "create" route on the wedding OWNER's effective
  * plan limit for `resource`. Sits in the same middleware slot as
- * `checkPermission` (after it, before `validate`) on every *.routes.ts file
+ * `requirePermission` (after it, before `validate`) on every *.routes.ts file
  * that creates guests/tasks/vendors/collaborators.
  */
 export const checkResourceLimit = (resource: CountableResource) => {
@@ -129,10 +129,17 @@ export const checkWeddingCreationLimit = async (req: Request, res: Response, nex
       return;
     }
 
+    // Weddings created for a planner organization count against that org's
+    // plan (OrgWeddingService.prepareCreate), not the person's own cap.
+    if (req.body?.organizationId) {
+      next();
+      return;
+    }
+
     const { cap } = await PlanResolutionService.getWeddingCreationCap(userId);
 
     if (cap !== UNLIMITED) {
-      const current = await Wedding.countDocuments({ createdBy: userId });
+      const current = await Wedding.countDocuments({ createdBy: userId, organizationId: null });
 
       if (current >= cap) {
         ApiResponse.error(res, 403, `You have reached your wedding limit (${cap}).`, {

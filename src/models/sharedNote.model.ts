@@ -1,6 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ISharedNote extends Document {
+  // Track C: team-only on an agency-run wedding — never returned to the
+  // client family (see services/access.service.ts `internalFilter`).
+  isInternal?: boolean;
   weddingId: mongoose.Types.ObjectId;
   title: string;
   content: string;
@@ -59,7 +62,11 @@ const sharedNoteSchema = new Schema<ISharedNote>({
       default: Date.now
     },
     previousContent: String
-  }]
+  }],
+  isInternal: {
+    type: Boolean,
+    default: false
+  }
 }, {
   timestamps: true
 });

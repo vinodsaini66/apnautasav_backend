@@ -16,6 +16,12 @@ export interface WeddingStats {
   planningProgress: number;
 }
 
+/** Track C: a client family's numbers leave out team-only (isInternal) tasks, vendors and expenses. */
+export interface StatsOptions {
+  excludeInternal?: boolean;
+}
+const hiddenFilter = (opts: StatsOptions) => (opts.excludeInternal ? { isInternal: { $ne: true } } : {});
+
 /**
  * The one place every guests/tasks/budget/vendors/collaborators aggregation
  * for a single wedding lives — shared by `GET /weddings/:id/stats` (the
@@ -24,7 +30,12 @@ export interface WeddingStats {
  * specifically so those two call sites can never quietly drift apart on how
  * "answered", "booked", "overdue", etc. are each defined.
  */
-export async function computeWeddingStats(weddingId: string, totalBudget: number): Promise<WeddingStats> {
+export async function computeWeddingStats(
+  weddingId: string,
+  totalBudget: number,
+  opts: StatsOptions = {}
+): Promise<WeddingStats> {
+  const hide = hiddenFilter(opts);
   const now = new Date();
   const weddingObjectId = new mongoose.Types.ObjectId(weddingId);
 
@@ -47,17 +58,17 @@ export async function computeWeddingStats(weddingId: string, totalBudget: number
     Guest.countDocuments({ weddingId }),
     Guest.countDocuments({ weddingId, rsvpStatus: 'confirmed' }),
     Guest.countDocuments({ weddingId, rsvpStatus: 'pending' }),
-    Task.countDocuments({ weddingId }),
-    Task.countDocuments({ weddingId, status: 'completed' }),
-    Task.countDocuments({ weddingId, status: { $nin: ['completed', 'cancelled'] }, dueDate: { $lt: now } }),
-    Budget.countDocuments({ weddingId }),
-    Budget.countDocuments({ weddingId, actualCost: { $ne: null, $exists: true } }),
+    Task.countDocuments({ weddingId, ...hide }),
+    Task.countDocuments({ weddingId, ...hide, status: 'completed' }),
+    Task.countDocuments({ weddingId, ...hide, status: { $nin: ['completed', 'cancelled'] }, dueDate: { $lt: now } }),
+    Budget.countDocuments({ weddingId, ...hide }),
+    Budget.countDocuments({ weddingId, ...hide, actualCost: { $ne: null, $exists: true } }),
     Budget.aggregate([
-      { $match: { weddingId: weddingObjectId } },
+      { $match: { weddingId: weddingObjectId, ...hide } },
       { $group: { _id: null, total: { $sum: '$actualCost' } } },
     ]),
     Budget.aggregate([
-      { $match: { weddingId: weddingObjectId } },
+      { $match: { weddingId: weddingObjectId, ...hide } },
       {
         $project: {
           paidAmount: {
@@ -78,13 +89,13 @@ export async function computeWeddingStats(weddingId: string, totalBudget: number
       { $group: { _id: null, total: { $sum: '$paidAmount' } } },
     ]),
     Budget.aggregate([
-      { $match: { weddingId: weddingObjectId } },
+      { $match: { weddingId: weddingObjectId, ...hide } },
       { $unwind: '$installments' },
       { $match: { 'installments.status': 'pending', 'installments.dueDate': { $lte: now } } },
       { $count: 'count' },
     ]),
-    Vendor.countDocuments({ weddingId }),
-    Vendor.countDocuments({ weddingId, bookingStatus: { $in: ['booked', 'confirmed'] } }),
+    Vendor.countDocuments({ weddingId, ...hide }),
+    Vendor.countDocuments({ weddingId, ...hide, bookingStatus: { $in: ['booked', 'confirmed'] } }),
     Collaborator.countDocuments({ weddingId, invitationStatus: 'accepted' }),
   ]);
 
@@ -196,7 +207,8 @@ export interface ConsoleOverview {
  * only a free-text per-guest accommodation note) — see the Console
  * redesign's own notes for why those two were dropped rather than faked.
  */
-export async function getConsoleOverview(weddingId: string): Promise<ConsoleOverview> {
+export async function getConsoleOverview(weddingId: string, opts: StatsOptions = {}): Promise<ConsoleOverview> {
+  const hide = hiddenFilter(opts);
   const now = new Date();
   const weddingObjectId = new mongoose.Types.ObjectId(weddingId);
 
@@ -214,7 +226,7 @@ export async function getConsoleOverview(weddingId: string): Promise<ConsoleOver
         { $group: { _id: '$eventIds', count: { $sum: 1 } } },
       ]),
       Budget.aggregate([
-        { $match: { weddingId: weddingObjectId, eventId: { $ne: null } } },
+        { $match: { weddingId: weddingObjectId, ...hide, eventId: { $ne: null } } },
         {
           $group: {
             _id: '$eventId',
@@ -223,11 +235,11 @@ export async function getConsoleOverview(weddingId: string): Promise<ConsoleOver
           },
         },
       ]),
-      Vendor.find({ weddingId: weddingObjectId, eventIds: { $in: eventIds } })
+      Vendor.find({ weddingId: weddingObjectId, ...hide, eventIds: { $in: eventIds } })
         .select('vendorName eventIds bookingStatus')
         .lean(),
       Budget.aggregate([
-        { $match: { weddingId: weddingObjectId } },
+        { $match: { weddingId: weddingObjectId, ...hide } },
         { $unwind: '$installments' },
         { $match: { 'installments.status': 'pending', 'installments.dueDate': { $lte: now } } },
         {
@@ -259,7 +271,7 @@ export async function getConsoleOverview(weddingId: string): Promise<ConsoleOver
         $or: [{ phoneNumber: { $exists: false } }, { phoneNumber: '' }],
       }),
       Task.aggregate([
-        { $match: { weddingId: weddingObjectId, eventId: { $ne: null } } },
+        { $match: { weddingId: weddingObjectId, ...hide, eventId: { $ne: null } } },
         {
           $group: {
             _id: '$eventId',

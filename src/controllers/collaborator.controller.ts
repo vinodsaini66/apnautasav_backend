@@ -8,7 +8,31 @@ import { NotificationService } from '../services/notification.service';
 import { generateInvitationCode } from '../utils/generateCode';
 import logger from '../utils/logger';
 import collaborationInvitation from '../models/collaborationInvitation';
-import { sendInvitationSms } from '../helpers/function';
+import { sendCollaborationInviteEmail } from '../helpers/function';
+import { OrgMember } from '../models/org/org-member.model';
+import { assignableStaffIds } from '../services/org/org-wedding.service';
+
+const planningTeamRows = async (req: Request) => {
+  const wedding = req.access?.wedding;
+  const staffIds = await assignableStaffIds(wedding);
+  if (!wedding || staffIds.size === 0) return [];
+  const [users, members] = await Promise.all([
+    User.find({ _id: { $in: [...staffIds] } }).select('fullName email phoneNumber').lean(),
+    OrgMember.find({ organizationId: wedding.organizationId, userId: { $in: [...staffIds] } }).select('userId role').lean(),
+  ]);
+  const roleOf = new Map(members.map((m) => [String(m.userId), m.role]));
+  const leadId = String(wedding.orgAssignees?.find((a) => a.isLead)?.userId ?? '');
+  return users.map((u) => ({
+    _id: `staff-${u._id}`,
+    weddingId: wedding._id,
+    userId: u,
+    role: 'admin',
+    invitationStatus: 'accepted',
+    isStaff: true,
+    staffRole: roleOf.get(String(u._id)),
+    isLead: String(u._id) === leadId,
+  }));
+};
 
 export class CollaboratorController {
 
@@ -17,7 +41,13 @@ export class CollaboratorController {
       const { weddingId } = req.params;
       const userId = req.user?.userId;
 
-      const { email, role, name } = req.body;
+      const { role, name } = req.body;
+      const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+
+      if (!email) {
+        ApiResponse.error(res, 400, 'Email is required');
+        return;
+      }
 
       const user = await User.findOne({ email });
 
@@ -34,10 +64,14 @@ export class CollaboratorController {
           invitationStatus: 'pending',
         });
 
-        await sendInvitationSms(email, invitationCode);
+        const inviter = await User.findById(userId).select('fullName').lean();
+        void sendCollaborationInviteEmail(email, {
+          inviterName: inviter?.fullName,
+          weddingName: req.access?.wedding.name,
+        });
 
         ApiResponse.success(res, 200, {
-          message: "User not registered. Invitation sent via SMS.",
+          message: 'User not registered. Invitation sent by email.',
           data: invitation,
         });
         return;
@@ -108,8 +142,13 @@ export class CollaboratorController {
       //   .populate('createdBy', 'fullName email phoneNumber')
       //   .lean();
 
+      // Agency weddings (Track C): list the planning team too, flagged
+      // `isStaff` so screens show them read-only (staff are managed from the
+      // agency's Team page, not per wedding).
+      const staff = !invitationStatus || invitationStatus === 'accepted' ? await planningTeamRows(req) : [];
+
       ApiResponse.success(res, 200, {
-        data: collaborators,
+        data: [...staff, ...collaborators],
         // owner: wedding?.createdBy
         // {
         //   owner: wedding?.createdBy,

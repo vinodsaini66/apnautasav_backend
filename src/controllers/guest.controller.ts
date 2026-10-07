@@ -14,6 +14,7 @@ import { renderTemplate } from '../utils/template.util';
 import logger from '../utils/logger';
 import { getSocketServer } from '../config/socket';
 import { PlanResolutionService, UNLIMITED } from '../services/plan-resolution.service';
+import { exportBrandingFor } from '../services/org/org-branding';
 
 const GUEST_CATEGORIES = ['family', 'friends', 'colleagues', 'others'];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -390,7 +391,7 @@ export class GuestController {
         isVIP: g.isVIP ? 'Yes' : 'No'
       }));
 
-      await sendExport(res, format as string, 'Guest List', 'guest-list', rows, GUEST_EXPORT_COLUMNS);
+      await sendExport(res, format as string, 'Guest List', 'guest-list', rows, GUEST_EXPORT_COLUMNS, await exportBrandingFor(req.access));
     } catch (error: any) {
       logger.error('Export guests error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to export guests');

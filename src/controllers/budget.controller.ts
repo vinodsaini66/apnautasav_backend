@@ -8,6 +8,8 @@ import { recalculateBudgetActual } from '../services/budget-installment.service'
 import { uploadBufferToS3, deleteObjectFromS3ByUrl } from '../config/s3';
 import { sendExport, ExportColumn } from '../services/export.service';
 import logger from '../utils/logger';
+import { internalFilter } from '../services/access.service';
+import { exportBrandingFor } from '../services/org/org-branding';
 
 const BUDGET_EXPORT_COLUMNS: ExportColumn[] = [
     { key: 'category', label: 'Category' },
@@ -77,7 +79,7 @@ export class BudgetController {
             const { page = 1, limit = 50, category, status, eventId } = req.query;
 
             const skip = (Number(page) - 1) * Number(limit);
-            const filter: any = { weddingId };
+            const filter: any = { weddingId, ...internalFilter(req.access) };
 
             if (category) filter.category = category;
             if (status) filter.status = status;
@@ -186,7 +188,7 @@ export class BudgetController {
             // (unlike Model.find()), so $match on a bare string silently
             // matches nothing. Cast explicitly, matching the convention
             // already used in event.controller.ts's aggregations.
-            const matchStage: any = { weddingId: new mongoose.Types.ObjectId(weddingId) };
+            const matchStage: any = { weddingId: new mongoose.Types.ObjectId(weddingId), ...internalFilter(req.access) };
             if (eventId) matchStage.eventId = new mongoose.Types.ObjectId(eventId as string);
 
             const analytics = await Budget.aggregate([
@@ -494,7 +496,7 @@ export class BudgetController {
             const { weddingId } = req.params;
             const { category, status, eventId, format } = req.query;
 
-            const filter: any = { weddingId };
+            const filter: any = { weddingId, ...internalFilter(req.access) };
             if (category) filter.category = category;
             if (status) filter.status = status;
             if (eventId) filter.eventId = eventId;
@@ -514,7 +516,7 @@ export class BudgetController {
                 vendor: b.vendor?.vendorName || ''
             }));
 
-            await sendExport(res, format as string, 'Budget', 'budget', rows, BUDGET_EXPORT_COLUMNS);
+            await sendExport(res, format as string, 'Budget', 'budget', rows, BUDGET_EXPORT_COLUMNS, await exportBrandingFor(req.access));
         } catch (error: any) {
             logger.error('Export budget error:', error);
             ApiResponse.error(res, 500, error.message || 'Failed to export budget');

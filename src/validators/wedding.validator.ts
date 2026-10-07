@@ -21,7 +21,18 @@ export const createWeddingSchema = z.object({
     currency: z.enum(['INR', 'USD', 'GBP', 'EUR', 'CAD', 'AUD', 'AED']).optional(),
     description: z.string().max(500).optional(),
     imageUrl: z.string().url().optional(),
-    functions: z.array(weddingFunctionSchema).optional()
+    functions: z.array(weddingFunctionSchema).optional(),
+    // Track C: create the wedding for a planner organization's client.
+    organizationId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid organization').optional(),
+    assignees: z.array(z.object({
+      userId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid assignee'),
+      isLead: z.boolean().optional()
+    })).max(20).optional(),
+    clientContact: z.object({
+      name: z.string().trim().max(100).optional(),
+      phone: z.string().trim().max(20).optional(),
+      email: z.string().trim().email().max(200).optional().or(z.literal(''))
+    }).optional()
   })
 });
 

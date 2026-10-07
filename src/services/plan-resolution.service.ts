@@ -5,6 +5,7 @@ import { Guest } from '../models/guest.model';
 import { Task } from '../models/task.model';
 import { Vendor } from '../models/vendor.model';
 import { Collaborator } from '../models/collaborator.model';
+import { Organization } from '../models/org/organization.model';
 import logger from '../utils/logger';
 
 export const UNLIMITED = -1;
@@ -37,7 +38,7 @@ const GRAND_PLAN_FALLBACK = {
   maxWeddings: null as number | null,
 };
 
-export type PlanSource = 'subscription' | 'one_time' | 'free' | 'temp_grand_override';
+export type PlanSource = 'subscription' | 'one_time' | 'free' | 'temp_grand_override' | 'organization';
 
 export interface EffectivePlan {
   source: PlanSource;
@@ -134,7 +135,23 @@ export class PlanResolutionService {
    * (account-level, wins for every wedding they have) > an active one-time
    * purchase scoped to this exact wedding > Free plan defaults.
    */
-  static async getEffectivePlanForWedding(_ownerUserId: string, _weddingId: string): Promise<EffectivePlan> {
+  static async getEffectivePlanForWedding(_ownerUserId: string, weddingId: string): Promise<EffectivePlan> {
+    // Track C: a wedding run by a planner organization is covered by the
+    // org's subscription, which limits active weddings and seats (see
+    // constants/org.ts) — never guests/tasks/vendors/collaborators inside a
+    // wedding. Checked before (and independent of) the family plan logic.
+    const orgWedding = await Wedding.findById(weddingId).select('organizationId').lean();
+    if (orgWedding?.organizationId) {
+      const org = await Organization.findById(orgWedding.organizationId).select('planKey').lean();
+      return {
+        source: 'organization',
+        planKey: org?.planKey ?? 'org_trial',
+        limits: { guests: UNLIMITED, tasks: UNLIMITED, vendors: UNLIMITED, collaborators: UNLIMITED },
+        budgetEnabled: true,
+        aiAssistantEnabled: true,
+      };
+    }
+
     // TEMP GRAND OVERRIDE — see block comment above GRAND_PLAN_FALLBACK.
     const grand = await this.getGrandPlanDefaults();
     return {
@@ -240,7 +257,7 @@ export class PlanResolutionService {
     // the plan identity and cap are overridden.
     const [grand, weddingsUsed] = await Promise.all([
       this.getGrandPlanDefaults(),
-      Wedding.countDocuments({ createdBy: userId }),
+      Wedding.countDocuments({ createdBy: userId, organizationId: null }),
     ]);
     return {
       hasActiveSubscription: true,
@@ -252,7 +269,7 @@ export class PlanResolutionService {
     /* ORIGINAL LOGIC — restore this (and delete the override above) to revert:
     const [subscription, weddingsUsed] = await Promise.all([
       this.getActiveSubscription(userId),
-      Wedding.countDocuments({ createdBy: userId }),
+      Wedding.countDocuments({ createdBy: userId, organizationId: null }),
     ]);
 
     if (subscription) {

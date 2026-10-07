@@ -32,6 +32,7 @@ import faqRoutes from './faq.routes';
 import testimonialRoutes from './testimonial.routes';
 import statsRoutes from './stats.routes';
 import vendorOsRoutes from './vendor-os';
+import orgRoutes from './org/org.routes';
 
 const router: Router = Router();
 
@@ -74,6 +75,8 @@ router.use('/stats', statsRoutes);
 // Vendor OS: separate vendor panel (own auth) + its public/family/admin
 // endpoints — see routes/vendor-os/index.ts.
 router.use('/vendor-os', vendorOsRoutes);
+// Track C — planner organizations (see routes/org/org.routes.ts).
+router.use('/orgs', orgRoutes);
 
 
 export default router;

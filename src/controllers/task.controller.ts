@@ -12,6 +12,11 @@ import { PlanResolutionService, UNLIMITED } from '../services/plan-resolution.se
 import { sendExport, ExportColumn } from '../services/export.service';
 import logger from '../utils/logger';
 import { getSocketServer } from '../config/socket';
+import { internalFilter } from '../services/access.service';
+import { User } from '../models/user.model';
+import { assignableStaffIds } from '../services/org/org-wedding.service';
+import { resolveTemplateAssignees, templateOrgsFor, visibleTemplateFilter } from '../services/org/org-template.service';
+import { exportBrandingFor } from '../services/org/org-branding';
 
 const TASK_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'title', label: 'Title' },
@@ -189,7 +194,7 @@ export class TaskController {
       const { page = 1, limit = 50, status, priority, category, assignedTo, eventId } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
-      const filter: any = { weddingId };
+      const filter: any = { weddingId, ...internalFilter(req.access) };
 
       if (status) filter.status = status;
       if (priority) filter.priority = priority;
@@ -224,7 +229,7 @@ export class TaskController {
       const { page = 1, limit = 50 } = req.query;
 
       const skip = (Number(page) - 1) * Number(limit);
-      const filter = { weddingId, assignedTo: userId };
+      const filter = { weddingId, assignedTo: userId, ...internalFilter(req.access) };
 
       const tasks = await Task.find(filter)
         .populate('assignedTo', 'fullName email')
@@ -346,7 +351,15 @@ export class TaskController {
         invitationStatus: 'accepted'
       }).populate('userId', 'fullName');
 
-      if (collaborators.length !== assignedTo.length) {
+      // Agency weddings (Track C): the planning team assigned to the wedding
+      // can be given tasks too, though they aren't collaborators.
+      const staffIds = await assignableStaffIds(req.access?.wedding);
+      const staffAssignees = assignedTo.filter((id) => staffIds.has(String(id)));
+      const staffUsers = staffAssignees.length
+        ? await User.find({ _id: { $in: staffAssignees } }).select('fullName').lean()
+        : [];
+
+      if (collaborators.length + staffAssignees.length !== assignedTo.length) {
         ApiResponse.error(res, 400, 'One or more selected users are not accepted collaborators on this wedding');
         return;
       }
@@ -379,8 +392,7 @@ export class TaskController {
         return;
       }
 
-      const assigneeNames = collaborators
-        .map((c) => (c.userId as any)?.fullName)
+      const assigneeNames = [...collaborators.map((c) => (c.userId as any)?.fullName), ...staffUsers.map((u) => u.fullName)]
         .filter(Boolean)
         .join(', ') || 'the collaborator(s)';
 
@@ -513,7 +525,7 @@ export class TaskController {
       const { actualHours } = req.body;
 
       const task = await Task.findOneAndUpdate(
-        { _id: taskId, weddingId },
+        { _id: taskId, weddingId, ...internalFilter(req.access) },
         {
           $set: {
             status: 'completed',
@@ -717,7 +729,7 @@ export class TaskController {
       const { weddingId } = req.params;
       const { status, priority, category, assignedTo, eventId, format } = req.query;
 
-      const filter: any = { weddingId };
+      const filter: any = { weddingId, ...internalFilter(req.access) };
       if (status) filter.status = status;
       if (priority) filter.priority = priority;
       if (category) filter.category = category;
@@ -738,7 +750,7 @@ export class TaskController {
         assignedTo: (t.assignedTo || []).map((u: any) => u.fullName).filter(Boolean).join(', ')
       }));
 
-      await sendExport(res, format as string, 'Task List', 'task-list', rows, TASK_EXPORT_COLUMNS);
+      await sendExport(res, format as string, 'Task List', 'task-list', rows, TASK_EXPORT_COLUMNS, await exportBrandingFor(req.access));
     } catch (error: any) {
       logger.error('Export tasks error:', error);
       ApiResponse.error(res, 500, error.message || 'Failed to export tasks');
@@ -763,23 +775,34 @@ export class TaskController {
       const { weddingId, templateId } = req.params;
       const userId = req.user?.userId;
 
-      const wedding = await Wedding.findById(weddingId).select('weddingDate');
+      const wedding = await Wedding.findById(weddingId).select('weddingDate organizationId orgAssignees');
       if (!wedding) {
         ApiResponse.error(res, 404, 'Wedding not found');
         return;
       }
 
-      // A template is usable here if it's a shared system preset, or one
-      // this user created themselves — same visibility rule as
-      // TaskTemplateController.getTemplates.
-      const template = await TaskTemplate.findOne({
-        _id: templateId,
-        $or: [{ isSystemTemplate: true }, { createdBy: userId }]
-      });
+      // Same visibility rule as TaskTemplateController.getTemplates: system
+      // presets, the caller's own, and their agencies' shared templates.
+      const templateOrgs = await templateOrgsFor(userId!);
+      const template = mongoose.isValidObjectId(templateId)
+        ? await TaskTemplate.findOne({ _id: templateId, ...visibleTemplateFilter(userId!, templateOrgs) })
+        : null;
       if (!template) {
         ApiResponse.error(res, 404, "Template not found, or you don't have access to it");
         return;
       }
+
+      // An agency's template only goes onto that agency's own client weddings,
+      // applied by its staff (templates.apply).
+      if (template.organizationId) {
+        const sameOrg = String(template.organizationId) === String(wedding.organizationId);
+        const canApply = req.access?.kind === 'org' && !!req.access.org?.permissions?.has('templates.apply');
+        if (!sameOrg || !canApply) {
+          ApiResponse.error(res, 403, "This agency template can only be used on the agency's own weddings");
+          return;
+        }
+      }
+      const assigneesByRole = await resolveTemplateAssignees(wedding);
 
       const ownerId = await PlanResolutionService.getWeddingOwner(weddingId);
       if (!ownerId) {
@@ -817,7 +840,11 @@ export class TaskController {
         priority: item.priority,
         status: 'pending',
         dueDate: new Date(wedding.weddingDate.getTime() + item.dueOffsetDays * 24 * 60 * 60 * 1000),
-        eventId: item.eventType ? eventIdByType.get(item.eventType) : undefined
+        eventId: item.eventType ? eventIdByType.get(item.eventType) : undefined,
+        // Agency templates (Track C): route to the planning team, and keep
+        // team-only items team-only. Both are no-ops on family weddings.
+        assignedTo: item.assigneeRole ? assigneesByRole.get(item.assigneeRole) ?? [] : [],
+        isInternal: !!item.isInternal && !!wedding.organizationId
       }));
 
       const created = toCreate.length > 0 ? await Task.insertMany(toCreate) : [];

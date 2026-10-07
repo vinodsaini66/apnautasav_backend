@@ -62,6 +62,11 @@ export class PurchaseService {
         throw new PurchaseError('Wedding not found', 404, 'WEDDING_NOT_FOUND');
       }
 
+      // Agency-run weddings (Track C) are covered by the agency's plan.
+      if (wedding.organizationId) {
+        throw new PurchaseError('This wedding is covered by your planner\'s plan', 400, 'ORG_WEDDING');
+      }
+
       if (wedding.createdBy.toString() !== userId) {
         throw new PurchaseError('Only the wedding creator can purchase a plan for this wedding', 403, 'FORBIDDEN');
       }

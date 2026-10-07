@@ -1,43 +1,11 @@
 import { Request, Response } from 'express';
 import { Vendor } from '../models/vendor.model';
 import { VendorReview } from '../models/vendor-review.model';
-import { Wedding } from '../models/wedding.model';
-import { Collaborator } from '../models/collaborator.model';
 import { ApiResponse } from '../utils/apiResponse';
 import { ActivityService } from '../services/activity.service';
 import { recalculateVendorRating } from '../services/vendor-review.service';
-import { CollaboratorRole } from '../types';
+import { hasPermission } from '../services/access.service';
 import logger from '../utils/logger';
-
-const ROLE_HIERARCHY: Record<CollaboratorRole, number> = {
-  [CollaboratorRole.VIEWER]: 1,
-  [CollaboratorRole.EDITOR]: 2,
-  [CollaboratorRole.ADMIN]: 3
-};
-
-/**
- * Whether `userId` has EDITOR-or-above rights on `weddingId` — the wedding
- * creator, or an accepted collaborator with role >= EDITOR. Mirrors
- * checkPermission's logic; used here because deleteReview needs to allow
- * either the review's own author OR an editor/admin override, so it can't
- * be gated purely by the router-level checkPermission middleware.
- */
-const hasEditorAccess = async (weddingId: string, userId: string): Promise<boolean> => {
-  const wedding = await Wedding.findById(weddingId);
-  if (!wedding) return false;
-
-  if (wedding.createdBy.toString() === userId) return true;
-
-  const collaborator = await Collaborator.findOne({
-    weddingId,
-    userId,
-    invitationStatus: 'accepted'
-  });
-
-  if (!collaborator) return false;
-
-  return ROLE_HIERARCHY[collaborator.role as CollaboratorRole] >= ROLE_HIERARCHY[CollaboratorRole.EDITOR];
-};
 
 export class VendorReviewController {
   static async submitReview(req: Request, res: Response): Promise<void> {
@@ -125,7 +93,8 @@ export class VendorReviewController {
 
       const isOwnReview = review.reviewerId.toString() === userId;
       if (!isOwnReview) {
-        const canOverride = await hasEditorAccess(weddingId, userId!);
+        // checkWeddingAccess already resolved the caller's access on this wedding.
+        const canOverride = !!req.access && hasPermission(req.access, 'vendors.manage');
         if (!canOverride) {
           ApiResponse.error(res, 403, 'You do not have permission to delete this review');
           return;

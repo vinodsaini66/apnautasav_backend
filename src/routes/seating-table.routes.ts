@@ -1,14 +1,13 @@
 import { Router } from 'express';
 import { SeatingTableController } from '../controllers/seating-table.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
-import { checkWeddingAccess, checkPermission } from '../middleware/authorization.middleware';
+import { checkWeddingAccess, requirePermission } from '../middleware/authorization.middleware';
 import { validate } from '../middleware/validation.middleware';
 import {
   createSeatingTableSchema,
   updateSeatingTableSchema,
   assignGuestSchema
 } from '../validators/seating-table.validator';
-import { CollaboratorRole } from '../types';
 
 const router: Router = Router();
 
@@ -19,21 +18,21 @@ router.use(authMiddleware);
 router.post(
   '/:weddingId/seating-tables',
   checkWeddingAccess,
-  checkPermission(CollaboratorRole.EDITOR),
+  requirePermission('guests.manage'),
   validate(createSeatingTableSchema),
   SeatingTableController.createTable
 );
 
-router.get('/:weddingId/seating-tables', checkWeddingAccess, SeatingTableController.getTables);
+router.get('/:weddingId/seating-tables', checkWeddingAccess, requirePermission('guests.view'), SeatingTableController.getTables);
 
 // Registered before /:tableId routes below — a literal path must win over
 // the wildcard segment.
-router.get('/:weddingId/seating-tables/unseated', checkWeddingAccess, SeatingTableController.getUnseatedGuests);
+router.get('/:weddingId/seating-tables/unseated', checkWeddingAccess, requirePermission('guests.view'), SeatingTableController.getUnseatedGuests);
 
 router.put(
   '/:weddingId/seating-tables/:tableId',
   checkWeddingAccess,
-  checkPermission(CollaboratorRole.EDITOR),
+  requirePermission('guests.manage'),
   validate(updateSeatingTableSchema),
   SeatingTableController.updateTable
 );
@@ -41,14 +40,14 @@ router.put(
 router.delete(
   '/:weddingId/seating-tables/:tableId',
   checkWeddingAccess,
-  checkPermission(CollaboratorRole.EDITOR),
+  requirePermission('guests.manage'),
   SeatingTableController.deleteTable
 );
 
 router.post(
   '/:weddingId/seating-tables/:tableId/guests',
   checkWeddingAccess,
-  checkPermission(CollaboratorRole.EDITOR),
+  requirePermission('guests.manage'),
   validate(assignGuestSchema),
   SeatingTableController.assignGuest
 );
@@ -56,7 +55,7 @@ router.post(
 router.delete(
   '/:weddingId/seating-tables/:tableId/guests/:guestId',
   checkWeddingAccess,
-  checkPermission(CollaboratorRole.EDITOR),
+  requirePermission('guests.manage'),
   SeatingTableController.unassignGuest
 );
 

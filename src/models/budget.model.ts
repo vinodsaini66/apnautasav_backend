@@ -20,6 +20,9 @@ export interface IBudgetDocument {
 }
 
 export interface IBudget extends Document {
+  // Track C: team-only on an agency-run wedding — never returned to the
+  // client family (see services/access.service.ts `internalFilter`).
+  isInternal?: boolean;
   weddingId: mongoose.Types.ObjectId;
   category: string;
   description: string;
@@ -166,6 +169,10 @@ const budgetSchema = new Schema<IBudget>({
   receipts: {
     type: [budgetDocumentSchema],
     default: []
+  },
+  isInternal: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

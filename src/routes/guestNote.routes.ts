@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { GuestNoteController } from '../controllers/guestNote.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
-import { checkWeddingAccess } from '../middleware/authorization.middleware';
+import { checkWeddingAccess, requirePermission } from '../middleware/authorization.middleware';
 
 /**
  * GET /:weddingId/guest-notes — owner/team-facing read of notes guests left
@@ -12,6 +12,6 @@ const router: Router = Router();
 
 router.use(authMiddleware);
 
-router.get('/:weddingId/guest-notes', checkWeddingAccess, GuestNoteController.getGuestNotes);
+router.get('/:weddingId/guest-notes', checkWeddingAccess, requirePermission('guests.view'), GuestNoteController.getGuestNotes);
 
 export default router;

@@ -7,14 +7,18 @@ const templateItemSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   // Offset in days from the wedding's own date — negative = before.
   dueOffsetDays: z.number().int(),
-  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other']).optional()
+  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other']).optional(),
+  assigneeRole: z.enum(['lead', 'manager', 'coordinator']).optional(),
+  isInternal: z.boolean().optional()
 });
 
 export const createTaskTemplateSchema = z.object({
   body: z.object({
     name: z.string().min(2).max(150),
     description: z.string().max(500).optional(),
-    items: z.array(templateItemSchema).min(1, 'At least one checklist item is required')
+    items: z.array(templateItemSchema).min(1, 'At least one checklist item is required'),
+    // Track C: share it with an agency's team instead of keeping it personal.
+    organizationId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid organization').optional()
   })
 });
 

@@ -41,6 +41,9 @@ export const VENDOR_CATEGORIES = [
 export type VendorCategory = (typeof VENDOR_CATEGORIES)[number];
 
 export interface IVendor extends Document {
+  // Track C: team-only on an agency-run wedding — never returned to the
+  // client family (see services/access.service.ts `internalFilter`).
+  isInternal?: boolean;
   weddingId: mongoose.Types.ObjectId;
   vendorName: string;
   category: VendorCategory;
@@ -175,7 +178,11 @@ const vendorSchema = new Schema<IVendor>({
     type: Schema.Types.ObjectId,
     ref: 'Event',
     default: []
-  }]
+  }],
+  isInternal: {
+    type: Boolean,
+    default: false
+  }
 }, {
   timestamps: true
 });
