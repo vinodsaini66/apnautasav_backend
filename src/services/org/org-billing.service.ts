@@ -4,7 +4,7 @@ import { OrgMember } from '../../models/org/org-member.model';
 import { OrgPayment } from '../../models/org/org-payment.model';
 import { Wedding } from '../../models/wedding.model';
 import { User } from '../../models/user.model';
-import { ORG_MAX_PAUSE_DAYS, ORG_PLANS, ORG_PLAN_KEYS, ORG_TRIAL_DAYS, OrgPlanKey } from '../../constants/org';
+import { FOUNDING_OFFER, ORG_ANNUAL_MONTHS_FREE, ORG_MAX_PAUSE_DAYS, ORG_PLANS, ORG_PLAN_KEYS, ORG_TRIAL_DAYS, OrgPlanKey } from '../../constants/org';
 import { OrgMembership, membershipPermissions, orgReadOnlyReason } from './org-access';
 import { ACTIVE_ORG_WEDDING } from './org-wedding.service';
 import { serializeOrg, uniqueSlug } from './org.service';
@@ -19,6 +19,35 @@ const publicPlans = () =>
   ORG_PLAN_KEYS.map((k) => ORG_PLANS[k])
     .filter((p) => !p.adminOnly)
     .map((p) => ({ ...p }));
+
+/**
+ * Public catalogue for the /for-planners page (no login): the plans a
+ * planner can pick, the trial length, and the Founding Planner offer with
+ * how many slots are really left.
+ */
+export const planCatalogue = async () => {
+  const founding = ORG_PLANS[FOUNDING_OFFER.planKey];
+  const slots = FOUNDING_OFFER.slots();
+  const taken = await Organization.countDocuments({ planKey: FOUNDING_OFFER.planKey });
+  const slotsLeft = Math.max(0, slots - taken);
+  const closesAt = new Date(`${FOUNDING_OFFER.applyBy}T23:59:59+05:30`);
+  return {
+    plans: publicPlans(),
+    trialDays: ORG_TRIAL_DAYS,
+    annualMonthsFree: ORG_ANNUAL_MONTHS_FREE,
+    founding: {
+      name: founding.name,
+      priceMonthly: founding.priceMonthly,
+      compareAtMonthly: ORG_PLANS.org_growth.priceMonthly,
+      limits: founding.limits,
+      freeUntil: FOUNDING_OFFER.freeUntil,
+      applyBy: FOUNDING_OFFER.applyBy,
+      slots,
+      slotsLeft,
+      open: slotsLeft > 0 && Date.now() <= closesAt.getTime(),
+    },
+  };
+};
 
 /** Where to pay, shown on the billing screen. Configured per deployment. */
 const paymentInstructions = () => ({
@@ -35,6 +64,8 @@ const addPeriod = (from: Date, period: BillingPeriod) => {
 };
 
 export class OrgBillingService {
+  static catalogue = planCatalogue;
+
   static async get(m: OrgMembership) {
     const [activeWeddings, seats, payments] = await Promise.all([
       Wedding.countDocuments({ organizationId: m.org._id, ...ACTIVE_ORG_WEDDING }),

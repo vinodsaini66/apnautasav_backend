@@ -34,6 +34,10 @@ import {
  * Creating one is POST /weddings with `organizationId` in the body.
  */
 const router: Router = Router();
+
+// Public, no login: plan catalogue for the marketing page.
+router.get('/plans', OrgController.plans);
+
 router.use(authMiddleware);
 
 // ---- ApnaUtsav admin (before /:orgId so "admin" isn't read as an org id) ----
