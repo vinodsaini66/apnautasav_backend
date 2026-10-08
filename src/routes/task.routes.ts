@@ -4,13 +4,14 @@ import { authMiddleware } from '../middleware/auth.middleware';
 import { checkWeddingAccess, requirePermission, checkTaskAssigneeOrPermission } from '../middleware/authorization.middleware';
 import { checkResourceLimit } from '../middleware/planLimit.middleware';
 import { validate } from '../middleware/validation.middleware';
-import { createTaskSchema, updateTaskSchema, assignTaskSchema, updateTaskStatusSchema, addSubtaskSchema, updateSubtaskSchema } from '../validators/task.validator';
+import { bulkCreateTasksSchema, createTaskSchema, updateTaskSchema, assignTaskSchema, updateTaskStatusSchema, addSubtaskSchema, updateSubtaskSchema } from '../validators/task.validator';
 
 const router: Router = Router();
 
 router.use(authMiddleware);
 
 router.post('/:weddingId/tasks', checkWeddingAccess, requirePermission('tasks.manage'), checkResourceLimit('tasks'), validate(createTaskSchema), TaskController.createTask);
+router.post('/:weddingId/tasks/bulk', checkWeddingAccess, requirePermission('tasks.manage'), validate(bulkCreateTasksSchema), TaskController.bulkCreate);
 // Checklist/task templates (#23) — apply a template's items as real tasks
 // on this wedding in one action. No checkResourceLimit here (that
 // middleware only knows how to gate a single-row create) — the controller

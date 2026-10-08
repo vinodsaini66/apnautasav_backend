@@ -67,3 +67,27 @@ export const updateSubtaskSchema = z.object({
     completed: z.boolean().optional()
   })
 });
+
+/**
+ * POST /:weddingId/tasks/bulk — many simple tasks at once, e.g. a checklist
+ * built with the public checklist generator before the visitor had an
+ * account. Kept deliberately small: no assignees, recurrence or dependencies.
+ */
+export const bulkCreateTasksSchema = z.object({
+  body: z.object({
+    source: z.string().trim().max(60).optional(),
+    tasks: z
+      .array(
+        z.object({
+          title: z.string().trim().min(3).max(200),
+          description: z.string().max(1000).optional(),
+          category: z.enum(['venue', 'decoration', 'catering', 'logistics', 'invitations', 'music', 'photography', 'others']),
+          priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+          status: z.enum(['pending', 'completed']).optional(),
+          dueDate: z.string().date().optional()
+        })
+      )
+      .min(1)
+      .max(200)
+  })
+});

@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import mongoSanitize from 'express-mongo-sanitize';
 import { connectDatabase } from './config/database';
+import { syncSystemTaskTemplates } from './services/system-templates.service';
 import { setupSwagger } from './config/swagger';
 import logger from './utils/logger';
 import routes from './routes';
@@ -80,6 +81,9 @@ app.use(errorMiddleware);
 const startServer = async () => {
   try {
     await connectDatabase();
+    // Global checklist templates (one per wedding function) live in code;
+    // keep the database copy current. A failure here must not stop the API.
+    await syncSystemTaskTemplates().catch((error) => logger.error('System task template sync failed:', error));
 
     // Must listen on `httpServer` (the one Socket.IO was attached to above),
     // not `app.listen(...)` — Express's own .listen() wraps `app` in a
