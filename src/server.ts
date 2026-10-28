@@ -16,6 +16,7 @@ import mongoose from 'mongoose';
 import { initializeSocket } from './config/socket';
 import { attachVendorRealtime } from './services/vendor-os/vendor-realtime';
 import { createServer } from 'http';
+import path from 'path';
 import './cron/wedding';
 import './cron/taskReminder';
 import './cron/vendorOs';
@@ -40,6 +41,19 @@ app.use(helmet());
 //   credentials: true
 // }));
 app.use(cors({ origin: "*", credentials: false }));
+
+// Static assets bundled with the backend (apnautasav_backend/public), e.g.
+// the default "Event poster art" at /static/event-posters/haldi.webp.
+// `../public` resolves to the same folder from src/ (dev) and dist/ (build).
+// helmet() sets Cross-Origin-Resource-Policy: same-origin, which would stop
+// the frontend (another origin) from showing these images — relaxed here.
+app.use(
+  '/static',
+  express.static(path.join(__dirname, '..', 'public'), {
+    maxAge: '30d',
+    setHeaders: (res) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+  })
+);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));

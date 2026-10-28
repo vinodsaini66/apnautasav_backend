@@ -37,7 +37,7 @@ export const createEventSchema = z.object({
     status: z.enum(['planning', 'confirmed', 'completed', 'cancelled']).optional(),
     isPublic: z.boolean().optional(),
     estimatedBudget: z.number().min(0).optional(),
-    imageUrl: z.string().url().optional()
+    imageUrl: z.union([z.string().url(), z.literal('')]).optional() // '' = back to the type's default poster
   })
 });
 
@@ -61,7 +61,7 @@ export const updateEventSchema = z.object({
     // website — distinct from `status`.
     isFamilyOnly: z.boolean().optional(),
     estimatedBudget: z.number().min(0).optional(),
-    imageUrl: z.string().url().optional()
+    imageUrl: z.union([z.string().url(), z.literal('')]).optional() // '' = back to the type's default poster
   })
 });
 
