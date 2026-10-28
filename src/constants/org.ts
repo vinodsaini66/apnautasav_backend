@@ -207,3 +207,21 @@ export const ORG_GRACE_DAYS = 7;
 export const ORG_INVITE_TTL_DAYS = 14;
 /** The most a pause can push a paid period (or trial) back by. */
 export const ORG_MAX_PAUSE_DAYS = 120;
+
+/**
+ * Founding Planner Program (Track C business analysis, §8 step 5): the first
+ * planners get the whole 2026-27 season free, then Growth features at a
+ * locked ₹999/month. Slots are limited; the count of orgs already on
+ * `org_founding` decides how many are left. An admin still assigns the plan.
+ */
+export const FOUNDING_OFFER = {
+  planKey: 'org_founding' as OrgPlanKey,
+  slots: () => Number(process.env.ORG_FOUNDING_SLOTS) || 3,
+  /** Free until the end of this day (IST season end). */
+  freeUntil: '2027-03-31',
+  /** Applications close at the end of this day. */
+  applyBy: '2026-10-31',
+};
+
+/** Annual price = 10 x monthly. */
+export const ORG_ANNUAL_MONTHS_FREE = 2;

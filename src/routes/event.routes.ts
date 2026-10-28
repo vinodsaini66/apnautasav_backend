@@ -3,6 +3,8 @@ import { EventController } from '../controllers/event.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { checkWeddingAccess, requirePermission } from '../middleware/authorization.middleware';
 import { validate } from '../middleware/validation.middleware';
+import { imageUpload } from '../middleware/upload.middleware';
+import { WeddingController } from '../controllers/wedding.controller';
 import { createEventSchema, updateEventSchema, addGuestsToEventSchema } from '../validators/event.validator';
 
 const router: Router = Router();
@@ -16,6 +18,16 @@ router.post(
     requirePermission('events.manage'),
     validate(createEventSchema),
     EventController.createEvent
+);
+
+// Upload "Event poster art" for a function (used before the event exists,
+// so it's wedding-scoped) — returns { url }; the form saves it as imageUrl.
+router.post(
+    '/:weddingId/event-poster',
+    checkWeddingAccess,
+    requirePermission('events.manage'),
+    imageUpload.single('image'),
+    WeddingController.uploadInvitationMedia
 );
 
 // Get all events

@@ -331,7 +331,9 @@ export class WeddingVendorService {
         price_high: { 'pricing.startingPrice': -1 },
         newest: { createdAt: -1 },
       };
-      const sortStage = SORT_STAGES[filters?.sortBy ?? 'recommended'] ?? SORT_STAGES.recommended;
+      // `_id` last breaks ties (bulk-imported vendors share createdAt and
+      // ratings), so page N and N+1 never overlap or skip a vendor.
+      const sortStage = { ...(SORT_STAGES[filters?.sortBy ?? 'recommended'] ?? SORT_STAGES.recommended), _id: 1 as const };
 
       const [
         vendors,

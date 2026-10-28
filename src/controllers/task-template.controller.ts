@@ -76,7 +76,7 @@ export class TaskTemplateController {
         filter.$and = [{ organizationId: new mongoose.Types.ObjectId(orgFilter) }];
       }
 
-      const templates = await TaskTemplate.find(filter).sort({ isSystemTemplate: -1, createdAt: -1 });
+      const templates = await TaskTemplate.find(filter).sort({ isSystemTemplate: -1, sortOrder: 1, createdAt: -1 });
 
       ApiResponse.success(res, 200, { data: templates.map((t) => decorate(t, userId, orgs)) });
     } catch (error: any) {

@@ -19,9 +19,14 @@ const q = (req: Request, key: string) => {
 };
 
 export class OrgController {
+  /** Public: plans + Founding Planner offer for the /for-planners page. */
+  static plans = handle(async (_req: Request, res: Response) => {
+    ApiResponse.success(res, 200, { data: await OrgBillingService.catalogue() });
+  }, 'list plans');
+
   // ---- organizations ------------------------------------------------------
   static create = handle(async (req: Request, res: Response) => {
-    ApiResponse.success(res, 201, { message: 'Agency created', data: await OrgService.create(userIdOf(req), req.body) });
+    ApiResponse.success(res, 201, { message: 'Business created', data: await OrgService.create(userIdOf(req), req.body) });
   }, 'create');
 
   static listMine = handle(async (req: Request, res: Response) => {
@@ -193,7 +198,7 @@ export class AdminOrgController {
   }, 'admin list');
 
   static create = handle(async (req: Request, res: Response) => {
-    ApiResponse.success(res, 201, { message: 'Agency created', data: await OrgBillingService.adminCreate(userIdOf(req), req.body) });
+    ApiResponse.success(res, 201, { message: 'Business created', data: await OrgBillingService.adminCreate(userIdOf(req), req.body) });
   }, 'admin create');
 
   static setPlan = handle(async (req: Request, res: Response) => {

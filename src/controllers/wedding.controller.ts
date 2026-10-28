@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Wedding } from '../models/wedding.model';
+import { Wedding, IWeddingInvitation } from '../models/wedding.model';
 import { Collaborator } from '../models/collaborator.model';
 import { Guest } from '../models/guest.model';
 import { Task } from '../models/task.model';
@@ -385,6 +385,26 @@ export class WeddingController {
     }
   }
 
+  /**
+   * POST /:weddingId/invitation-media (image) and /invitation-audio (music) —
+   * uploads one file for the guest invitation page and returns its URL. Doesn't
+   * touch the wedding; the client saves the URL via public-settings.
+   */
+  static async uploadInvitationMedia(req: Request, res: Response): Promise<void> {
+    try {
+      // Shared by /invitation-media (field "image") and /invitation-audio (field "audio").
+      if (!req.file) {
+        ApiResponse.error(res, 400, 'No file provided');
+        return;
+      }
+      const url = await uploadBufferToS3(req.file.buffer, req.file.originalname, req.file.mimetype, 'invitation-media');
+      ApiResponse.success(res, 201, { message: 'Image uploaded', data: { url } });
+    } catch (error: any) {
+      logger.error('Upload invitation media error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to upload image');
+    }
+  }
+
   static async uploadImage(req: Request, res: Response): Promise<void> {
     try {
       if (!req.file) {
@@ -701,8 +721,11 @@ export class WeddingController {
   static async updatePublicSettings(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
-      const { isPublic, publicSlug, venueAddress, accommodationInfo, pickupInfo, giftPolicy } = req.body as {
+      const { isPublic, publicSlug, venueAddress, accommodationInfo, pickupInfo, giftPolicy, invitation, groomName, brideName } = req.body as {
         isPublic: boolean;
+        groomName?: string;
+        brideName?: string;
+        invitation?: IWeddingInvitation;
         publicSlug?: string;
         venueAddress?: string;
         accommodationInfo?: string;
@@ -733,6 +756,14 @@ export class WeddingController {
       if (accommodationInfo !== undefined) wedding.accommodationInfo = accommodationInfo;
       if (pickupInfo !== undefined) wedding.pickupInfo = pickupInfo;
       if (giftPolicy !== undefined) wedding.giftPolicy = giftPolicy;
+      if (groomName) wedding.groomName = groomName;
+      if (brideName) wedding.brideName = brideName;
+      // Merge, so the design card and content card can save independently.
+      if (invitation !== undefined) {
+        const current = (wedding.invitation as any)?.toObject?.() ?? wedding.invitation ?? {};
+        wedding.invitation = { ...current, ...invitation };
+        wedding.markModified('invitation');
+      }
 
       if (isPublic && !wedding.publicSlug) {
         await ensurePublicSlug(wedding);
@@ -748,7 +779,10 @@ export class WeddingController {
           venueAddress: wedding.venueAddress,
           accommodationInfo: wedding.accommodationInfo,
           pickupInfo: wedding.pickupInfo,
-          giftPolicy: wedding.giftPolicy
+          giftPolicy: wedding.giftPolicy,
+          invitation: wedding.invitation,
+          groomName: wedding.groomName,
+          brideName: wedding.brideName
         }
       });
     } catch (error: any) {
@@ -786,6 +820,7 @@ export class WeddingController {
           accommodationInfo: wedding.accommodationInfo,
           pickupInfo: wedding.pickupInfo,
           giftPolicy: wedding.giftPolicy,
+          invitation: wedding.invitation,
           // Track C: an agency on a white-label plan signs the page ("Planned by …").
           planner: await publicPlannerFor(wedding.organizationId)
         }
@@ -811,7 +846,7 @@ export class WeddingController {
       }
 
       const events = await WeddingEvent.find({ weddingId: wedding._id })
-        .select('title eventType startDateTime endDateTime location dressCode status isFamilyOnly')
+        .select('title eventType description imageUrl startDateTime endDateTime location dressCode status isFamilyOnly')
         .sort({ startDateTime: 1 })
         .lean();
 

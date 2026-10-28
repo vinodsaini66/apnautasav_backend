@@ -42,6 +42,8 @@ export interface ITaskTemplate extends Document {
   // these, for idempotent re-seeding.
   isSystemTemplate: boolean;
   key?: string;
+  /** System templates only: position in the template picker, smallest first. */
+  sortOrder?: number;
   items: ITaskTemplateItem[];
   createdAt: Date;
   updatedAt: Date;
@@ -120,6 +122,9 @@ const taskTemplateSchema = new Schema<ITaskTemplate>(
       type: String,
       unique: true,
       sparse: true
+    },
+    sortOrder: {
+      type: Number
     },
     items: {
       type: [taskTemplateItemSchema],

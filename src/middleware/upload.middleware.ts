@@ -57,3 +57,19 @@ export const videoUpload = multer({
     callback(null, true);
   },
 });
+
+// Invitation background music (Invitation tab → Music): small audio files.
+const ALLOWED_AUDIO_MIME_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm'];
+const MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+export const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_AUDIO_SIZE_BYTES },
+  fileFilter: (_req, file, callback) => {
+    if (!ALLOWED_AUDIO_MIME_TYPES.includes(file.mimetype)) {
+      callback(new Error('Only MP3, M4A, AAC, WAV or OGG audio is allowed'));
+      return;
+    }
+    callback(null, true);
+  },
+});

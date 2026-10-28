@@ -1,6 +1,36 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import { CLIENT_SECTION_LEVELS, ClientAccessSettings } from '../constants/client-access';
 
+// Guest invitation page design (`/w/[slug]`). The page is one fixed
+// template; these are the knobs a family gets — a colour palette (with
+// optional per-colour overrides) plus the content the template's sections
+// need that isn't already on the wedding (photos, story, gallery, music).
+// Every field is optional: an unset field means the template's default
+// (palette) or a hidden section (content), never fabricated content.
+export interface IWeddingInvitation {
+  template?: string;
+  effect?: string;
+  palette?: string;
+  accentColor?: string;
+  backgroundColor?: string;
+  inkColor?: string;
+  showInvocation?: boolean;
+  invocation?: string;
+  introLine?: string;
+  groomPhotoUrl?: string;
+  bridePhotoUrl?: string;
+  groomParents?: string;
+  brideParents?: string;
+  story?: string;
+  storyQuote?: string;
+  gallery?: string[];
+  musicUrl?: string;
+  stayContacts?: { name: string; role?: string; phone?: string }[];
+  // Per-line wording overrides (reveal screen, section titles, RSVP copy).
+  // Sparse: absent key → template default, "" → line hidden.
+  texts?: Record<string, string>;
+}
+
 export interface IWedding extends Document {
   name: string;
   weddingCode: string;
@@ -32,6 +62,7 @@ export interface IWedding extends Document {
   accommodationInfo?: string;
   pickupInfo?: string;
   giftPolicy?: string;
+  invitation?: IWeddingInvitation;
   // Track C (planner agencies — apnautasav_frontend/docs/TrackC_Planner_Organization_Plan.md).
   // All optional: unset organizationId = an ordinary family wedding, exactly
   // as before. When set, access comes from org membership (access.service.ts)
@@ -145,6 +176,33 @@ const weddingSchema = new Schema<IWedding>({
     type: String,
     trim: true,
     maxlength: [2000, 'Gift policy cannot exceed 2000 characters']
+  },
+  invitation: {
+    type: new Schema<IWeddingInvitation>({
+      template: { type: String, trim: true },
+      effect: { type: String, trim: true },
+      palette: { type: String, trim: true },
+      accentColor: { type: String, trim: true },
+      backgroundColor: { type: String, trim: true },
+      inkColor: { type: String, trim: true },
+      showInvocation: { type: Boolean },
+      invocation: { type: String, trim: true, maxlength: 120 },
+      introLine: { type: String, trim: true, maxlength: 160 },
+      groomPhotoUrl: { type: String, trim: true },
+      bridePhotoUrl: { type: String, trim: true },
+      groomParents: { type: String, trim: true, maxlength: 160 },
+      brideParents: { type: String, trim: true, maxlength: 160 },
+      story: { type: String, trim: true, maxlength: 2000 },
+      storyQuote: { type: String, trim: true, maxlength: 300 },
+      gallery: { type: [String], default: undefined },
+      musicUrl: { type: String, trim: true },
+      stayContacts: {
+        type: [{ _id: false, name: { type: String, trim: true }, role: { type: String, trim: true }, phone: { type: String, trim: true } }],
+        default: undefined
+      },
+      texts: { type: Schema.Types.Mixed, default: undefined }
+    }, { _id: false }),
+    default: undefined
   },
   organizationId: {
     type: Schema.Types.ObjectId,

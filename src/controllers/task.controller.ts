@@ -758,10 +758,89 @@ export class TaskController {
   }
 
   /**
+   * POST /:weddingId/tasks/bulk — creates many simple tasks in one request
+   * (the public checklist generator's "turn it into real tasks"). Same
+   * plan-limit handling as applyTemplate: as many as fit are created, the
+   * rest come back as skipped instead of failing the whole batch.
+   */
+  static async bulkCreate(req: Request, res: Response): Promise<void> {
+    try {
+      const { weddingId } = req.params;
+      const userId = req.user?.userId;
+      const { tasks: rows, source } = req.body as {
+        source?: string;
+        tasks: { title: string; description?: string; category: string; priority?: string; status?: 'pending' | 'completed'; dueDate?: string }[];
+      };
+
+      const ownerId = await PlanResolutionService.getWeddingOwner(weddingId);
+      if (!ownerId) {
+        ApiResponse.error(res, 404, 'Wedding not found');
+        return;
+      }
+      const effective = await PlanResolutionService.getEffectivePlanForWedding(ownerId, weddingId);
+      const limit = effective.limits.tasks;
+      let allowedCount = rows.length;
+      if (limit !== UNLIMITED) {
+        const usage = await PlanResolutionService.getCurrentUsage(weddingId);
+        allowedCount = Math.max(0, limit - usage.tasks);
+      }
+
+      const applied = rows.slice(0, allowedCount);
+      const skipped = rows.slice(allowedCount);
+      const now = new Date();
+      const created = applied.length
+        ? await Task.insertMany(
+            applied.map((row) => ({
+              weddingId,
+              createdBy: userId,
+              title: row.title,
+              description: row.description,
+              category: row.category,
+              priority: row.priority ?? 'medium',
+              status: row.status ?? 'pending',
+              completedAt: row.status === 'completed' ? now : undefined,
+              dueDate: row.dueDate ? new Date(row.dueDate) : undefined,
+              assignedTo: []
+            }))
+          )
+        : [];
+
+      if (created.length > 0) {
+        try {
+          await ActivityService.logActivity({
+            weddingId,
+            userId: userId!,
+            actionType: 'created',
+            entityType: 'task',
+            description: `Added ${created.length} task(s)${source ? ` from ${source}` : ''}`
+          });
+        } catch (activityError) {
+          logger.warn('Failed to log bulk task activity:', activityError);
+        }
+        try {
+          getSocketServer().emitToWedding(weddingId, 'task:template-applied', { templateName: source ?? 'checklist', count: created.length, timestamp: new Date() });
+        } catch (socketError) {
+          logger.warn('Failed to emit bulk task socket event:', socketError);
+        }
+      }
+
+      ApiResponse.success(res, 201, {
+        message: `${created.length} task(s) added`,
+        data: { createdCount: created.length, skippedCount: skipped.length, limit: limit === UNLIMITED ? null : limit }
+      });
+    } catch (error: any) {
+      logger.error('Bulk create tasks error:', error);
+      ApiResponse.error(res, 500, error.message || 'Failed to add tasks');
+    }
+  }
+
+  /**
    * POST /:weddingId/tasks/apply-template/:templateId — checklist
    * templates (gap #23). Clones every item on the template into a real
    * Task for this wedding: each item's dueOffsetDays is resolved against
-   * the wedding's own weddingDate, and an item tagged with an eventType is
+   * its function's date (an item tagged with an eventType, when that
+   * function has a date on this wedding) or else the wedding's own
+   * weddingDate, and an item tagged with an eventType is
    * auto-linked to whichever Event of that type already exists on this
    * wedding (left untagged — task still created — if none does).
    *
@@ -820,13 +899,18 @@ export class TaskController {
 
       // Pre-fetch this wedding's events once so each item's optional
       // eventType lookup is an in-memory map lookup, not a query per item.
-      const events = await WeddingEvent.find({ weddingId }).select('eventType').lean();
+      const events = await WeddingEvent.find({ weddingId }).select('eventType startDateTime').lean();
       const eventIdByType = new Map<string, mongoose.Types.ObjectId>();
+      const eventDateByType = new Map<string, Date>();
       events.forEach((event) => {
         if (!eventIdByType.has(event.eventType)) {
           eventIdByType.set(event.eventType, event._id as mongoose.Types.ObjectId);
+          if (event.startDateTime) eventDateByType.set(event.eventType, new Date(event.startDateTime));
         }
       });
+      // A function's checklist (e.g. "3 days before Haldi") counts back from
+      // that function's own date when the wedding has it, else the wedding date.
+      const baseDateFor = (eventType?: string) => (eventType && eventDateByType.get(eventType)) || wedding.weddingDate;
 
       const applied = template.items.slice(0, allowedCount);
       const skipped = template.items.slice(allowedCount);
@@ -839,7 +923,7 @@ export class TaskController {
         category: item.category,
         priority: item.priority,
         status: 'pending',
-        dueDate: new Date(wedding.weddingDate.getTime() + item.dueOffsetDays * 24 * 60 * 60 * 1000),
+        dueDate: new Date(baseDateFor(item.eventType).getTime() + item.dueOffsetDays * 24 * 60 * 60 * 1000),
         eventId: item.eventType ? eventIdByType.get(item.eventType) : undefined,
         // Agency templates (Track C): route to the planning team, and keep
         // team-only items team-only. Both are no-ops on family weddings.

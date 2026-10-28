@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/auth.middleware';
 import { checkWeddingAccess, requirePermission } from '../middleware/authorization.middleware';
 import { checkWeddingCreationLimit } from '../middleware/planLimit.middleware';
 import { validate } from '../middleware/validation.middleware';
-import { imageUpload } from '../middleware/upload.middleware';
+import { audioUpload, imageUpload } from '../middleware/upload.middleware';
 import { updateClientAccessSchema } from '../validators/client-access.validator';
 import { createWeddingSchema, updateWeddingSchema, joinWeddingSchema, updatePublicSettingsSchema } from '../validators/wedding.validator';
 
@@ -34,6 +34,8 @@ router.patch('/:weddingId/client-access', checkWeddingAccess, requirePermission(
 router.get('/:weddingId/plan', checkWeddingAccess, WeddingController.getWeddingPlan);
 router.put('/:weddingId', checkWeddingAccess, requirePermission('wedding.edit'), validate(updateWeddingSchema), WeddingController.updateWedding);
 router.post('/:weddingId/image', checkWeddingAccess, requirePermission('wedding.edit'), imageUpload.single('image'), WeddingController.uploadImage);
+router.post('/:weddingId/invitation-media', checkWeddingAccess, requirePermission('wedding.settings'), imageUpload.single('image'), WeddingController.uploadInvitationMedia);
+router.post('/:weddingId/invitation-audio', checkWeddingAccess, requirePermission('wedding.settings'), audioUpload.single('audio'), WeddingController.uploadInvitationMedia);
 router.delete('/:weddingId', checkWeddingAccess, requirePermission('wedding.delete'), WeddingController.deleteWedding);
 router.get('/:weddingId/stats', checkWeddingAccess, WeddingController.getWeddingStats);
 router.get('/:weddingId/console', checkWeddingAccess, WeddingController.getConsoleOverview);

@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import mongoSanitize from 'express-mongo-sanitize';
 import { connectDatabase } from './config/database';
+import { syncSystemTaskTemplates } from './services/system-templates.service';
 import { setupSwagger } from './config/swagger';
 import logger from './utils/logger';
 import routes from './routes';
@@ -15,6 +16,7 @@ import mongoose from 'mongoose';
 import { initializeSocket } from './config/socket';
 import { attachVendorRealtime } from './services/vendor-os/vendor-realtime';
 import { createServer } from 'http';
+import path from 'path';
 import './cron/wedding';
 import './cron/taskReminder';
 import './cron/vendorOs';
@@ -39,6 +41,19 @@ app.use(helmet());
 //   credentials: true
 // }));
 app.use(cors({ origin: "*", credentials: false }));
+
+// Static assets bundled with the backend (apnautasav_backend/public), e.g.
+// the default "Event poster art" at /static/event-posters/haldi.webp.
+// `../public` resolves to the same folder from src/ (dev) and dist/ (build).
+// helmet() sets Cross-Origin-Resource-Policy: same-origin, which would stop
+// the frontend (another origin) from showing these images — relaxed here.
+app.use(
+  '/static',
+  express.static(path.join(__dirname, '..', 'public'), {
+    maxAge: '30d',
+    setHeaders: (res) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+  })
+);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -80,6 +95,9 @@ app.use(errorMiddleware);
 const startServer = async () => {
   try {
     await connectDatabase();
+    // Global checklist templates (one per wedding function) live in code;
+    // keep the database copy current. A failure here must not stop the API.
+    await syncSystemTaskTemplates().catch((error) => logger.error('System task template sync failed:', error));
 
     // Must listen on `httpServer` (the one Socket.IO was attached to above),
     // not `app.listen(...)` — Express's own .listen() wraps `app` in a
