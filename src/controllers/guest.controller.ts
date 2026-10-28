@@ -44,6 +44,12 @@ const GUEST_EXPORT_COLUMNS: ExportColumn[] = [
 // NEXT_PUBLIC_API_URL-in-reverse convention the frontend already uses.
 const FRONTEND_BASE_URL = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
+// Without FRONTEND_URL a deployed backend hands out localhost links to
+// guests (WhatsApp/email/SMS invites) — make that loud.
+if (!process.env.FRONTEND_URL && process.env.NODE_ENV === 'production') {
+  logger.warn('FRONTEND_URL is not set — guest RSVP links will point to http://localhost:3000. Set it to the live site URL.');
+}
+
 const buildRsvpLink = (publicSlug: string, rsvpToken: string): string =>
   `${FRONTEND_BASE_URL}/w/${publicSlug}?rsvp=${rsvpToken}`;
 
