@@ -78,7 +78,7 @@ const taskTemplateItemSchema = new Schema<ITaskTemplateItem>(
     },
     eventType: {
       type: String,
-      enum: ['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other']
+      enum: ['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'baraat', 'other']
     },
     assigneeRole: {
       type: String,

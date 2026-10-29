@@ -8,6 +8,7 @@ const eventTypeEnum = z.enum([
   'haldi',
   'engagement',
   'cocktail',
+  'baraat',
   'other'
 ]);
 
@@ -29,6 +30,8 @@ export const createEventSchema = z.object({
     description: z.string()
       .max(1000, 'Description cannot exceed 1000 characters')
       .optional(),
+    // Short script line under the title on the invitation ("Followed by dinner")
+    subtitle: z.string().max(120, 'Subtitle cannot exceed 120 characters').optional(),
     eventType: eventTypeEnum,
     startDateTime: z.string().datetime().optional(),
     endDateTime: z.string().datetime().optional(),
@@ -50,6 +53,8 @@ export const updateEventSchema = z.object({
     description: z.string()
       .max(1000, 'Description cannot exceed 1000 characters')
       .optional(),
+    // Short script line under the title on the invitation ("Followed by dinner")
+    subtitle: z.string().max(120, 'Subtitle cannot exceed 120 characters').optional(),
     eventType: eventTypeEnum.optional(),
     startDateTime: z.string().datetime().optional(),
     endDateTime: z.string().datetime().optional(),

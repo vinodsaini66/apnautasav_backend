@@ -4,7 +4,9 @@ export interface IEvent extends Document {
     weddingId: mongoose.Types.ObjectId;
     title: string;
     description?: string;
-    eventType: 'ceremony' | 'reception' | 'mehendi' | 'sangeet' | 'haldi' | 'engagement' | 'cocktail' | 'other';
+    // Short script line under the title on the invitation ("Followed by dinner").
+    subtitle?: string;
+    eventType: 'ceremony' | 'reception' | 'mehendi' | 'sangeet' | 'haldi' | 'engagement' | 'cocktail' | 'baraat' | 'other';
     // Optional: a couple often knows they're doing a Sangeet before they've
     // picked a date or venue. Undated events show as "Date TBD" in the UI,
     // sort last, and are excluded from upcoming/timeline queries.
@@ -57,10 +59,15 @@ const eventSchema = new Schema<IEvent>({
         trim: true,
         maxlength: [1000, 'Description cannot exceed 1000 characters']
     },
+    subtitle: {
+        type: String,
+        trim: true,
+        maxlength: [120, 'Subtitle cannot exceed 120 characters']
+    },
     eventType: {
         type: String,
         enum: {
-            values: ['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other'],
+            values: ['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'baraat', 'other'],
             message: '{VALUE} is not a valid event type'
         },
         required: [true, 'Event type is required'],

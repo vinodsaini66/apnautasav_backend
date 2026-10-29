@@ -846,7 +846,7 @@ export class WeddingController {
       }
 
       const events = await WeddingEvent.find({ weddingId: wedding._id })
-        .select('title eventType description imageUrl startDateTime endDateTime location dressCode status isFamilyOnly')
+        .select('title eventType description subtitle imageUrl startDateTime endDateTime location dressCode status isFamilyOnly')
         .sort({ startDateTime: 1 })
         .lean();
 

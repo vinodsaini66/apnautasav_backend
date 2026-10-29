@@ -7,7 +7,7 @@ const templateItemSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   // Offset in days from the wedding's own date — negative = before.
   dueOffsetDays: z.number().int(),
-  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other']).optional(),
+  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'baraat', 'other']).optional(),
   assigneeRole: z.enum(['lead', 'manager', 'coordinator']).optional(),
   isInternal: z.boolean().optional()
 });
