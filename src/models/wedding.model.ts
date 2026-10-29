@@ -21,6 +21,9 @@ export interface IWeddingInvitation {
   bridePhotoUrl?: string;
   groomParents?: string;
   brideParents?: string;
+  // "Grandson of Late Shri … & Smt. …" — optional, hidden on the invitation when empty
+  groomGrandparents?: string;
+  brideGrandparents?: string;
   story?: string;
   storyQuote?: string;
   gallery?: string[];
@@ -192,6 +195,8 @@ const weddingSchema = new Schema<IWedding>({
       bridePhotoUrl: { type: String, trim: true },
       groomParents: { type: String, trim: true, maxlength: 160 },
       brideParents: { type: String, trim: true, maxlength: 160 },
+      groomGrandparents: { type: String, trim: true, maxlength: 200 },
+      brideGrandparents: { type: String, trim: true, maxlength: 200 },
       story: { type: String, trim: true, maxlength: 2000 },
       storyQuote: { type: String, trim: true, maxlength: 300 },
       gallery: { type: [String], default: undefined },

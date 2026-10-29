@@ -83,7 +83,7 @@ const vendorInputSchema = z.object({
 const eventInputSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().max(1000).optional(),
-  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'other']),
+  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'baraat', 'other']),
   startDateTime: z.string().optional().describe('ISO 8601 datetime, e.g. 2026-12-31T18:00:00Z'),
   endDateTime: z.string().optional().describe('ISO 8601 datetime, e.g. 2026-12-31T22:00:00Z'),
   dressCode: z.string().max(100).optional(),
