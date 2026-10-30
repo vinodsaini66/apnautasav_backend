@@ -88,7 +88,7 @@ export const updatePublicSettingsSchema = z.object({
     // '' (clear the override and fall back to the palette).
     invitation: z
       .object({
-        template: z.enum(['pastel-caricature', 'pastel-peaks', 'marigold-mela', 'shahi-raat', 'prem-patra', 'shubh-vivah', 'sindoor']).optional(),
+        template: z.enum(['pastel-caricature', 'pastel-peaks', 'marigold-mela', 'shahi-raat', 'prem-patra', 'shubh-vivah', 'sindoor', 'phoolwari', 'vrindavan', 'madhubani', 'deepdaan']).optional(),
         // '' = back to the template's own default effect.
         effect: z.enum(['', 'confetti', 'colorful', 'hearts', 'stars', 'dots', 'petals', 'none']).optional(),
         palette: z.string().max(40).optional(),
