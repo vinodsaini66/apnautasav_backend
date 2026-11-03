@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { SquadService } from '../services/squad.service';
 import { Collaborator } from '../models/collaborator.model';
 import { User } from '../models/user.model';
 // import { Wedding } from '../models/wedding.model';
@@ -237,6 +238,10 @@ export class CollaboratorController {
         ApiResponse.error(res, 404, 'Collaborator not found');
         return;
       }
+
+      // Off the wedding means out of its squads too; their unfinished squad
+      // tasks go back to the squad's open pool for someone else to pick up.
+      await SquadService.removeMember(weddingId, String(collaborator.userId));
 
       await ActivityService.logActivity({
         weddingId,

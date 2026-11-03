@@ -20,7 +20,8 @@ export const createTaskSchema = z.object({
     eventId: z.string().optional(),
     reminderOffsetDays: z.number().int().min(0).optional(),
     recurrence: recurrenceSchema.optional(),
-    dependsOn: z.array(z.string()).optional()
+    dependsOn: z.array(z.string()).optional(),
+    squadId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid squad').nullable().optional()
   })
 });
 
@@ -38,7 +39,8 @@ export const updateTaskSchema = z.object({
     eventId: z.string().optional(),
     reminderOffsetDays: z.number().int().min(0).optional(),
     recurrence: recurrenceSchema.optional(),
-    dependsOn: z.array(z.string()).optional()
+    dependsOn: z.array(z.string()).optional(),
+    squadId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid squad').nullable().optional()
   })
 });
 

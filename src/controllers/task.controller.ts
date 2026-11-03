@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Task, ITask } from '../models/task.model';
+import { Squad } from '../models/squad.model';
 import { Collaborator } from '../models/collaborator.model';
 import { TaskTemplate } from '../models/task-template.model';
 import { Wedding } from '../models/wedding.model';
@@ -122,12 +123,23 @@ async function generateNextRecurringTask(task: ITask, userId: string): Promise<v
   }
 }
 
+// A task's squad must be one of this wedding's own squads (null/absent = no squad).
+async function squadBelongsToWedding(squadId: unknown, weddingId: string): Promise<boolean> {
+  if (!squadId) return true;
+  return !!(await Squad.exists({ _id: squadId, weddingId }));
+}
+
 export class TaskController {
   static async createTask(req: Request, res: Response): Promise<void> {
     try {
       const { weddingId } = req.params;
       const userId = req.user?.userId;
       const taskData = req.body;
+
+      if (!(await squadBelongsToWedding(taskData.squadId, weddingId))) {
+        ApiResponse.error(res, 400, 'That squad is not part of this wedding');
+        return;
+      }
 
       let task = await Task.create({
         ...taskData,
@@ -255,6 +267,11 @@ export class TaskController {
       const { weddingId, taskId } = req.params;
       const userId = req.user?.userId;
       const updateData = req.body;
+
+      if (!(await squadBelongsToWedding(updateData.squadId, weddingId))) {
+        ApiResponse.error(res, 400, 'That squad is not part of this wedding');
+        return;
+      }
 
       // Editing dueDate or reminderOffsetDays re-arms the one-shot due-date
       // reminder so it can fire again against the new schedule.
@@ -463,7 +480,10 @@ export class TaskController {
 
       const update: any = { status };
       if (actualHours !== undefined) update.actualHours = actualHours;
-      if (status === 'completed') update.completedAt = new Date();
+      if (status === 'completed') {
+        update.completedAt = new Date();
+        update.completedBy = userId;
+      }
 
       const task = await Task.findOneAndUpdate(
         { _id: existingTask._id, weddingId },
@@ -530,6 +550,7 @@ export class TaskController {
           $set: {
             status: 'completed',
             completedAt: new Date(),
+            completedBy: userId,
             actualHours
           }
         },

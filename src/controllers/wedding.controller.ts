@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Squad } from '../models/squad.model';
 import { Wedding, IWeddingInvitation } from '../models/wedding.model';
 import { Collaborator } from '../models/collaborator.model';
 import { Guest } from '../models/guest.model';
@@ -590,7 +591,8 @@ export class WeddingController {
         Comment.deleteMany({ weddingId }),
         Activity.deleteMany({ weddingId }),
         Notification.deleteMany({ weddingId }),
-        CollaborationInvitation.deleteMany({ weddingId })
+        CollaborationInvitation.deleteMany({ weddingId }),
+        Squad.deleteMany({ weddingId })
       ]);
 
       ApiResponse.success(res, 200, {

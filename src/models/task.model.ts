@@ -49,6 +49,10 @@ export interface ITask extends Document {
   // Dependencies (#25d): other tasks this one is blocked on. Frontend-only
   // enforcement — no backend checks against this array.
   dependsOn?: mongoose.Types.ObjectId[];
+  // Family squads: the squad this task belongs to (its score counts the
+  // squad's tasks) and who actually ticked it off (weekly digest's hero).
+  squadId?: mongoose.Types.ObjectId | null;
+  completedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -176,6 +180,15 @@ const taskSchema = new Schema<ITask>({
   isInternal: {
     type: Boolean,
     default: false
+  },
+  squadId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Squad',
+    default: null
+  },
+  completedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
   }
 }, {
   timestamps: true
@@ -187,5 +200,6 @@ taskSchema.index({ status: 1 });
 taskSchema.index({ dueDate: 1 });
 taskSchema.index({ assignedTo: 1 });
 taskSchema.index({ eventId: 1 });
+taskSchema.index({ squadId: 1 });
 
 export const Task = mongoose.model<ITask>('Task', taskSchema);
