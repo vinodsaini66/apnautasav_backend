@@ -19,6 +19,7 @@ import { createServer } from 'http';
 import path from 'path';
 import './cron/wedding';
 import './cron/taskReminder';
+import './cron/squadNudge';
 import './cron/vendorOs';
 // Load environment variables
 dotenv.config();
