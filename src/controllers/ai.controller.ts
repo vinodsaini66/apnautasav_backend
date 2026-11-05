@@ -1,336 +1,280 @@
 import { Request, Response } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
-import { betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod';
-// The project's installed zod (3.25.x) ships its Zod-4-compatible API under
-// the 'zod/v4' subpath — @anthropic-ai/sdk's betaZodTool() is typed against
-// that API specifically (peerDependency: "zod": "^3.25.0 || ^4.0.0"), so
-// this file imports from 'zod/v4' rather than the project's usual 'zod'
-// (classic v3 API, used everywhere else — src/validators/*.ts — which
-// stays untouched).
-import { z } from 'zod/v4';
-import { Wedding } from '../models/wedding.model';
-import { VENDOR_CATEGORIES } from '../models/vendor.model';
+import mongoose from 'mongoose';
 import { ApiResponse } from '../utils/apiResponse';
 import logger from '../utils/logger';
+import { hasPermission } from '../services/access.service';
+import { WeddingPermission } from '../constants/permissions';
+import { WeddingEvent } from '../models/event.model';
+import * as Ai from '../services/ai.service';
 import * as AiTools from '../services/ai-tools.service';
 
-// Per the skill's "ALWAYS use claude-opus-5 unless the user explicitly
-// names a different model" rule — no date suffix.
-const MODEL_ID = 'claude-opus-5';
+// AI Assistant routes (see services/ai.service.ts):
+//   POST /weddings/:weddingId/ai/extract  speech/text -> draft records (saves nothing)
+//   POST /weddings/:weddingId/ai/commit   save the drafts the user confirmed
+//   POST /weddings/:weddingId/ai/chat     ideas chat, never stored
+// The route chain already checked wedding access, `ai.use` and the plan.
 
-interface AiAction {
-  type: 'created' | 'updated';
-  entityType: string;
-  entityName?: string;
+const MAX_INPUT_CHARS = 3000;
+const MAX_ITEMS_PER_TYPE = 25;
+
+const canSeeBudget = (req: Request) => Boolean(req.access && hasPermission(req.access, 'budget.view'));
+
+/** Shared error mapping for the two routes that call the model. */
+const sendAiError = (res: Response, error: unknown, fallback: string) => {
+  if (error instanceof Ai.AiNotConfiguredError) {
+    ApiResponse.error(res, 503, error.message);
+  } else if (error instanceof Ai.AiRefusedError) {
+    ApiResponse.error(res, 422, error.message);
+  } else if (error instanceof Anthropic.RateLimitError) {
+    ApiResponse.error(res, 429, 'The AI is busy right now. Please try again in a minute.');
+  } else if (error instanceof Anthropic.APIError) {
+    logger.error(`AI API error ${error.status}:`, error.message);
+    ApiResponse.error(res, 502, 'The AI service had a problem. Please try again.');
+  } else {
+    logger.error(fallback, error);
+    ApiResponse.error(res, 500, fallback);
+  }
+};
+
+/** 429 once today's AI calls are used up (this person's or the wedding's); true means go ahead. */
+const takeQuota = async (weddingId: string, userId: string, res: Response): Promise<boolean> => {
+  if (!Ai.isAiConfigured()) {
+    ApiResponse.error(res, 503, 'The AI Assistant is not configured on this server.');
+    return false;
+  }
+  const quota = await Ai.consumeDailyQuota(weddingId, userId);
+  if (!quota.ok) {
+    const message =
+      quota.scope === 'user'
+        ? `You've used your ${quota.limit} AI requests for today on this wedding. They reset at midnight.`
+        : `Your family has used this wedding's ${quota.limit} AI requests for today. They reset at midnight.`;
+    ApiResponse.error(res, 429, message, { code: 'AI_DAILY_LIMIT', scope: quota.scope, limit: quota.limit });
+    return false;
+  }
+  return true;
+};
+
+// ---------------------------------------------------------------- commit helpers
+
+/** Drops null / empty-string / undefined fields so optional validators pass. */
+const clean = <T extends Record<string, any>>(obj: T): Partial<T> => {
+  const out: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj || {})) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === 'string' && value.trim() === '') continue;
+    out[key] = typeof value === 'string' ? value.trim() : value;
+  }
+  return out as Partial<T>;
+};
+
+const asArray = (value: unknown): any[] => (Array.isArray(value) ? value.slice(0, MAX_ITEMS_PER_TYPE) : []);
+
+/** "2026-12-12" + "18:30" (India time) -> ISO string, or undefined without a valid date. */
+const toIso = (date?: string | null, time?: string | null): string | undefined => {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
+  const hhmm = time && /^\d{1,2}:\d{2}$/.test(time) ? time.padStart(5, '0') : '10:00';
+  const parsed = new Date(`${date}T${hhmm}:00+05:30`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+};
+
+interface CommitResult {
+  type: 'guest' | 'task' | 'vendor' | 'event' | 'budget' | 'note';
+  clientId?: string;
+  name: string;
   success: boolean;
-  message?: string;
+  message: string;
 }
-
-interface ChatHistoryMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-// Tool input schemas. These are deliberately a bit looser than the real
-// create*Schema Zod validators in src/validators/ — they only need to be
-// good enough to steer Claude's tool call; ai-tools.service.ts re-validates
-// every input against the actual validator (or, for notes, its own manual
-// check) before touching the database, exactly like every other write path
-// in this codebase.
-const guestInputSchema = z.object({
-  name: z.string().min(2).max(50).describe('Full name of the guest'),
-  phoneNumber: z.string().optional(),
-  address: z.string().optional(),
-  category: z.enum(['family', 'friends', 'colleagues', 'others']),
-  rsvpStatus: z.enum(['pending', 'confirmed', 'declined']).optional(),
-  notes: z.string().optional(),
-  isVIP: z.boolean().optional(),
-  email: z.string().optional(),
-  plusOne: z.number().min(0).optional().describe('Number of additional guests this person is bringing'),
-  dietaryRestrictions: z.string().optional(),
-  seatingPreference: z.string().optional()
-});
-
-const taskInputSchema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().optional(),
-  category: z.enum(['venue', 'decoration', 'catering', 'logistics', 'invitations', 'music', 'photography', 'others']),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
-  dueDate: z.string().optional().describe('Due date in YYYY-MM-DD format'),
-  estimatedHours: z.number().positive().optional()
-});
-
-const budgetItemInputSchema = z.object({
-  category: z.enum(['venue', 'decoration', 'catering', 'logistics', 'invitations', 'music', 'photography', 'others']),
-  description: z.string().min(3).max(200),
-  estimatedCost: z.number().positive(),
-  actualCost: z.number().positive().optional(),
-  status: z.enum(['estimated', 'approved', 'paid', 'pending']).optional(),
-  notes: z.string().optional()
-});
-
-const vendorInputSchema = z.object({
-  vendorName: z.string().min(2).max(100),
-  category: z.enum(VENDOR_CATEGORIES),
-  contactPerson: z.string().optional(),
-  email: z.string().optional(),
-  phoneNumber: z.string().min(10).describe('Vendor contact phone number, at least 10 digits'),
-  estimatedCost: z.number().positive().optional(),
-  bookingStatus: z.enum(['inquiry', 'negotiating', 'booked', 'confirmed', 'cancelled']).optional(),
-  notes: z.string().optional()
-});
-
-const eventInputSchema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().max(1000).optional(),
-  eventType: z.enum(['ceremony', 'reception', 'mehendi', 'sangeet', 'haldi', 'engagement', 'cocktail', 'baraat', 'other']),
-  startDateTime: z.string().optional().describe('ISO 8601 datetime, e.g. 2026-12-31T18:00:00Z'),
-  endDateTime: z.string().optional().describe('ISO 8601 datetime, e.g. 2026-12-31T22:00:00Z'),
-  dressCode: z.string().max(100).optional(),
-  estimatedBudget: z.number().min(0).optional()
-});
-
-const noteInputSchema = z.object({
-  title: z.string().min(1).max(200),
-  content: z.string().min(1).max(10000),
-  tags: z.array(z.string()).optional()
-});
-
-const markTaskStatusInputSchema = z.object({
-  taskQuery: z.string().min(1).describe("A word or phrase from the task's title to search for"),
-  status: z.enum(['pending', 'in-progress', 'completed', 'cancelled'])
-});
-
-const listGuestsInputSchema = z.object({
-  rsvpStatus: z.enum(['pending', 'confirmed', 'declined']).optional(),
-  category: z.enum(['family', 'friends', 'colleagues', 'others']).optional()
-});
-
-const listTasksInputSchema = z.object({
-  status: z.enum(['pending', 'in-progress', 'completed', 'cancelled']).optional()
-});
 
 export class AiController {
-  /**
-   * POST /weddings/:weddingId/ai/chat
-   *
-   * Wedding-level authorization for the whole conversation is already
-   * guaranteed by the route's middleware chain (checkWeddingAccess ->
-   * requirePermission('ai.use') -> checkAiAssistantEnabled) — every tool below
-   * only replicates the narrower per-resource checks (validators, plan
-   * resource limits) that the equivalent REST controller would run.
-   */
-  static async chat(req: Request, res: Response): Promise<void> {
+  /** POST /weddings/:weddingId/ai/extract  { text } -> drafts for review */
+  static async extract(req: Request, res: Response): Promise<void> {
+    const { weddingId } = req.params;
+    const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+
+    if (!text) {
+      ApiResponse.error(res, 400, 'Say or type what you want to add.');
+      return;
+    }
+    if (text.length > MAX_INPUT_CHARS) {
+      ApiResponse.error(res, 400, `That's too long — keep it under ${MAX_INPUT_CHARS} characters.`);
+      return;
+    }
+
     try {
-      const { weddingId } = req.params;
-      const userId = req.user?.userId;
-      const { message, history } = req.body as { message?: string; history?: ChatHistoryMessage[] };
+      if (!(await takeQuota(weddingId, req.user!.userId, res))) return;
+      const drafts = await Ai.extractDrafts(weddingId, text, canSeeBudget(req));
+      ApiResponse.success(res, 200, { data: drafts });
+    } catch (error) {
+      sendAiError(res, error, 'Could not understand that. Please try again.');
+    }
+  }
 
-      if (!userId) {
-        ApiResponse.error(res, 401, 'Unauthorized');
-        return;
+  /**
+   * POST /weddings/:weddingId/ai/commit  { guests, tasks, vendors, events, budgetItems, notes }
+   *
+   * Saves the drafts the user confirmed (and maybe edited). Each type needs
+   * the same permission its own REST route needs, and each item goes through
+   * the same validator, plan limit and activity log (ai-tools.service.ts).
+   * One bad item doesn't stop the rest; every item reports its own result.
+   * Doesn't call the model, so it doesn't count against the daily limit.
+   */
+  static async commit(req: Request, res: Response): Promise<void> {
+    const { weddingId } = req.params;
+    const userId = req.user!.userId;
+    const access = req.access!;
+    const body = req.body || {};
+    const results: CommitResult[] = [];
+
+    const allowed = (perm: WeddingPermission) => hasPermission(access, perm);
+    const denied = (type: CommitResult['type'], items: any[], label: (i: any) => string) => {
+      for (const item of items) {
+        results.push({ type, clientId: item?.clientId, name: label(item), success: false, message: "You don't have permission to add this." });
+      }
+    };
+
+    try {
+      // Guests may only be linked to this wedding's own functions.
+      const validEventIds = new Set(
+        (await WeddingEvent.find({ weddingId }).select('_id').lean()).map((e: any) => String(e._id))
+      );
+
+      // Functions first, so they exist before anything that mentions them.
+      const events = asArray(body.events);
+      if (events.length && !allowed('events.manage')) denied('event', events, (e) => e?.title || 'Function');
+      else {
+        for (const e of events) {
+          const r = await AiTools.addEvent(
+            weddingId,
+            userId,
+            clean({
+              title: e?.title,
+              eventType: e?.eventType,
+              startDateTime: toIso(e?.date, e?.time),
+              location: e?.venueName ? { venueName: String(e.venueName).trim() } : undefined
+            })
+          );
+          results.push({ type: 'event', clientId: e?.clientId, name: e?.title || 'Function', success: r.success, message: r.message });
+        }
       }
 
-      if (!message || typeof message !== 'string' || !message.trim()) {
-        ApiResponse.error(res, 400, 'message is required');
-        return;
+      const guests = asArray(body.guests);
+      if (guests.length && !allowed('guests.manage')) denied('guest', guests, (g) => g?.name || 'Guest');
+      else {
+        for (const g of guests) {
+          const eventIds = Array.isArray(g?.eventIds)
+            ? g.eventIds.filter((id: unknown) => typeof id === 'string' && mongoose.isValidObjectId(id) && validEventIds.has(id))
+            : [];
+          const plusOne = Number.isFinite(g?.plusOne) && g.plusOne > 0 ? Math.round(g.plusOne) : undefined;
+          const r = await AiTools.addGuest(
+            weddingId,
+            userId,
+            clean({
+              name: g?.name,
+              phoneNumber: g?.phoneNumber,
+              category: g?.category || 'others',
+              plusOne,
+              isVIP: g?.isVIP === true ? true : undefined,
+              notes: g?.notes,
+              eventIds: eventIds.length ? eventIds : undefined
+            })
+          );
+          results.push({ type: 'guest', clientId: g?.clientId, name: g?.name || 'Guest', success: r.success, message: r.message });
+        }
       }
 
-      const wedding = await Wedding.findById(weddingId).select('name brideName groomName weddingDate');
-      if (!wedding) {
-        ApiResponse.error(res, 404, 'Wedding not found');
-        return;
+      const tasks = asArray(body.tasks);
+      if (tasks.length && !allowed('tasks.manage')) denied('task', tasks, (t) => t?.title || 'Task');
+      else {
+        for (const t of tasks) {
+          const dueDate = typeof t?.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate) ? t.dueDate : undefined;
+          const r = await AiTools.addTask(
+            weddingId,
+            userId,
+            clean({ title: t?.title, category: t?.category || 'others', priority: t?.priority, dueDate, description: t?.description })
+          );
+          results.push({ type: 'task', clientId: t?.clientId, name: t?.title || 'Task', success: r.success, message: r.message });
+        }
       }
 
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) {
-        logger.error('AI chat requested but ANTHROPIC_API_KEY is not configured');
-        ApiResponse.error(res, 503, 'The AI Assistant is not configured on this server.');
-        return;
+      const vendors = asArray(body.vendors);
+      if (vendors.length && !allowed('vendors.manage')) denied('vendor', vendors, (v) => v?.vendorName || 'Vendor');
+      else {
+        for (const v of vendors) {
+          const cost = Number(v?.estimatedCost);
+          const r = await AiTools.addVendor(
+            weddingId,
+            userId,
+            clean({
+              vendorName: v?.vendorName,
+              category: v?.category,
+              contactPerson: v?.contactPerson,
+              phoneNumber: v?.phoneNumber,
+              estimatedCost: Number.isFinite(cost) && cost > 0 ? cost : undefined,
+              bookingStatus: v?.bookingStatus,
+              notes: v?.notes
+            })
+          );
+          results.push({ type: 'vendor', clientId: v?.clientId, name: v?.vendorName || 'Vendor', success: r.success, message: r.message });
+        }
       }
 
-      const client = new Anthropic({ apiKey });
+      const budgetItems = asArray(body.budgetItems);
+      if (budgetItems.length && !allowed('budget.manage')) denied('budget', budgetItems, (b) => b?.description || 'Budget item');
+      else {
+        for (const b of budgetItems) {
+          const r = await AiTools.addBudgetItem(
+            weddingId,
+            userId,
+            clean({ description: b?.description, category: b?.category || 'others', estimatedCost: Number(b?.estimatedCost), status: b?.status })
+          );
+          results.push({ type: 'budget', clientId: b?.clientId, name: b?.description || 'Budget item', success: r.success, message: r.message });
+        }
+      }
 
-      // Each tool's `run` pushes its own outcome into this closure array —
-      // the mechanism this codebase uses to observe intermediate tool
-      // calls/results out of the Tool Runner's loop, since the runner's
-      // return value only surfaces the final assistant message.
-      const actions: AiAction[] = [];
+      const notes = asArray(body.notes);
+      if (notes.length && !allowed('notes.manage')) denied('note', notes, (n) => n?.title || 'Note');
+      else {
+        for (const n of notes) {
+          const r = await AiTools.addNote(weddingId, userId, { title: n?.title, content: n?.content });
+          results.push({ type: 'note', clientId: n?.clientId, name: n?.title || 'Note', success: r.success, message: r.message });
+        }
+      }
 
-      const weddingDateStr = wedding.weddingDate ? new Date(wedding.weddingDate).toISOString().slice(0, 10) : 'not yet set';
-      const todayStr = new Date().toISOString().slice(0, 10);
-
-      const system = `You are the AI wedding-planning assistant for ${wedding.brideName} & ${wedding.groomName}'s wedding ("${wedding.name}"), scheduled for ${weddingDateStr}. Today's date is ${todayStr}.
-
-You can create guests, tasks, budget items, vendors, events, and notes, update a task's status, and answer questions about this wedding (guest/task/budget/vendor summaries and lists). You must NEVER delete anything — you have no delete capability at all, by design, and must never claim otherwise. Stay scoped to this one wedding only; never reference or act on any other wedding. If a request is ambiguous (for example, which task to update when several could match), ask a clarifying question instead of guessing. Keep replies concise and friendly.`;
-
-      const tools = [
-        betaZodTool({
-          name: 'add_guest',
-          description: "Add a new guest to this wedding's guest list.",
-          inputSchema: guestInputSchema,
-          run: async (input) => {
-            const result = await AiTools.addGuest(weddingId, userId, input);
-            actions.push({
-              type: 'created',
-              entityType: 'guest',
-              entityName: input.name,
-              success: result.success,
-              message: result.message
-            });
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'add_task',
-          description: 'Add a new to-do/task for this wedding.',
-          inputSchema: taskInputSchema,
-          run: async (input) => {
-            const result = await AiTools.addTask(weddingId, userId, input);
-            actions.push({
-              type: 'created',
-              entityType: 'task',
-              entityName: input.title,
-              success: result.success,
-              message: result.message
-            });
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'add_budget_item',
-          description: "Add a new line item to this wedding's budget. Fails gracefully if Budget tracking isn't enabled on the current plan.",
-          inputSchema: budgetItemInputSchema,
-          run: async (input) => {
-            const result = await AiTools.addBudgetItem(weddingId, userId, input);
-            actions.push({
-              type: 'created',
-              entityType: 'budget',
-              entityName: input.description,
-              success: result.success,
-              message: result.message
-            });
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'add_vendor',
-          description: "Add a new vendor to this wedding's vendor list.",
-          inputSchema: vendorInputSchema,
-          run: async (input) => {
-            const result = await AiTools.addVendor(weddingId, userId, input);
-            actions.push({
-              type: 'created',
-              entityType: 'vendor',
-              entityName: input.vendorName,
-              success: result.success,
-              message: result.message
-            });
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'add_event',
-          description: 'Add a new function/event (e.g. Mehendi, Sangeet, Pheras, Reception — eventType "ceremony" is the Pheras/wedding-vows function) to this wedding.',
-          inputSchema: eventInputSchema,
-          run: async (input) => {
-            const result = await AiTools.addEvent(weddingId, userId, input);
-            actions.push({
-              type: 'created',
-              entityType: 'event',
-              entityName: input.title,
-              success: result.success,
-              message: result.message
-            });
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'add_note',
-          description: 'Add a shared note for this wedding.',
-          inputSchema: noteInputSchema,
-          run: async (input) => {
-            const result = await AiTools.addNote(weddingId, userId, input);
-            actions.push({
-              type: 'created',
-              entityType: 'note',
-              entityName: input.title,
-              success: result.success,
-              message: result.message
-            });
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'mark_task_status',
-          description:
-            "Update an existing task's status by matching a word or phrase against its title. If multiple tasks match, ask the user which one they meant instead of guessing.",
-          inputSchema: markTaskStatusInputSchema,
-          run: async (input) => {
-            const result = await AiTools.markTaskStatus(weddingId, userId, input);
-            actions.push({
-              type: 'updated',
-              entityType: 'task',
-              entityName: (result.data && result.data.title) || input.taskQuery,
-              success: result.success,
-              message: result.message
-            });
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'get_wedding_summary',
-          description:
-            'Get an aggregate read-only summary of this wedding: guest RSVP counts, task completion counts, vendor booking counts, and budget totals (if Budget is enabled on the plan).',
-          inputSchema: z.object({}),
-          run: async () => {
-            const result = await AiTools.getWeddingSummary(weddingId);
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'list_guests',
-          description: 'List up to 20 guests, optionally filtered by RSVP status and/or category.',
-          inputSchema: listGuestsInputSchema,
-          run: async (input) => {
-            const result = await AiTools.listGuests(weddingId, input);
-            return JSON.stringify(result);
-          }
-        }),
-        betaZodTool({
-          name: 'list_tasks',
-          description: 'List up to 20 tasks, optionally filtered by status.',
-          inputSchema: listTasksInputSchema,
-          run: async (input) => {
-            const result = await AiTools.listTasks(weddingId, input);
-            return JSON.stringify(result);
-          }
-        })
-      ];
-
-      const finalMessage = await client.beta.messages.toolRunner({
-        model: MODEL_ID,
-        max_tokens: 4096,
-        system,
-        messages: [...(history || []), { role: 'user', content: message }],
-        tools
-      });
-
-      const reply = finalMessage.content
-        .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n')
-        .trim();
+      if (results.length === 0) {
+        ApiResponse.error(res, 400, 'Nothing to save.');
+        return;
+      }
 
       ApiResponse.success(res, 200, {
-        data: {
-          reply: reply || "I've made the requested changes." ,
-          actions
-        }
+        data: { results, saved: results.filter((r) => r.success).length, failed: results.filter((r) => !r.success).length }
       });
-    } catch (error: any) {
-      logger.error('AI chat error:', error);
-      ApiResponse.error(res, 500, error?.message || 'Failed to process AI chat message');
+    } catch (error) {
+      logger.error('AI commit error:', error);
+      ApiResponse.error(res, 500, 'Could not save. Please try again.');
+    }
+  }
+
+  /** POST /weddings/:weddingId/ai/chat  { message, history } -> { reply } */
+  static async chat(req: Request, res: Response): Promise<void> {
+    const { weddingId } = req.params;
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+
+    if (!message) {
+      ApiResponse.error(res, 400, 'message is required');
+      return;
+    }
+    if (message.length > MAX_INPUT_CHARS) {
+      ApiResponse.error(res, 400, `That's too long — keep it under ${MAX_INPUT_CHARS} characters.`);
+      return;
+    }
+
+    try {
+      if (!(await takeQuota(weddingId, req.user!.userId, res))) return;
+      const reply = await Ai.chat(weddingId, message, req.body?.history, canSeeBudget(req));
+      ApiResponse.success(res, 200, { data: { reply } });
+    } catch (error) {
+      sendAiError(res, error, 'Could not get a reply. Please try again.');
     }
   }
 }
