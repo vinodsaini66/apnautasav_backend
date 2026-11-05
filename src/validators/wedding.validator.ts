@@ -88,7 +88,7 @@ export const updatePublicSettingsSchema = z.object({
     // '' (clear the override and fall back to the palette).
     invitation: z
       .object({
-        template: z.enum(['pastel-caricature', 'pastel-peaks', 'marigold-mela', 'shahi-raat', 'prem-patra', 'shubh-vivah', 'sindoor', 'phoolwari', 'vrindavan', 'madhubani', 'deepdaan', 'shagun']).optional(),
+        template: z.enum(['pastel-caricature', 'pastel-peaks', 'marigold-mela', 'shahi-raat', 'prem-patra', 'shubh-vivah', 'sindoor', 'phoolwari', 'vrindavan', 'madhubani', 'deepdaan', 'shagun', 'ivory']).optional(),
         // '' = back to the template's own default effect.
         effect: z.enum(['', 'confetti', 'colorful', 'hearts', 'stars', 'dots', 'petals', 'none']).optional(),
         palette: z.string().max(40).optional(),
@@ -110,9 +110,16 @@ export const updatePublicSettingsSchema = z.object({
         storyVideoUrl: z.string().max(500).optional(),
         gallery: z.array(z.string().max(1000)).max(24, 'Up to 24 gallery photos').optional(),
         musicUrl: z.string().max(1000).optional(),
+        musicTitle: z.string().max(80).optional(),
+        musicArtist: z.string().max(80).optional(),
         stayContacts: z
           .array(z.object({ name: z.string().min(1).max(80), role: z.string().max(80).optional(), phone: z.string().max(30).optional() }))
           .max(6)
+          .optional(),
+        familiesTitle: z.string().max(80).optional(),
+        families: z
+          .array(z.object({ label: z.string().max(60).optional(), names: z.string().max(500), quote: z.boolean().optional() }))
+          .max(8, 'Up to 8 family groups')
           .optional(),
         texts: z
           .record(z.string().regex(/^[a-zA-Z]{2,40}$/, 'Invalid text key'), z.string().max(300, 'Each line can be up to 300 characters'))

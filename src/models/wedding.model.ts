@@ -30,7 +30,14 @@ export interface IWeddingInvitation {
   storyVideoUrl?: string;
   gallery?: string[];
   musicUrl?: string;
+  // Shown on the "Our song" player (Ivory template).
+  musicTitle?: string;
+  musicArtist?: string;
   stayContacts?: { name: string; role?: string; phone?: string }[];
+  // "Our families" (Shagun template): titled groups of names — "With the
+  // blessings of" grandparents, "Eager to see you" families, a kids' line…
+  familiesTitle?: string;
+  families?: { label?: string; names: string; quote?: boolean }[];
   // Per-line wording overrides (reveal screen, section titles, RSVP copy).
   // Sparse: absent key → template default, "" → line hidden.
   texts?: Record<string, string>;
@@ -204,8 +211,15 @@ const weddingSchema = new Schema<IWedding>({
       storyVideoUrl: { type: String, trim: true, maxlength: 500 },
       gallery: { type: [String], default: undefined },
       musicUrl: { type: String, trim: true },
+      musicTitle: { type: String, trim: true, maxlength: 80 },
+      musicArtist: { type: String, trim: true, maxlength: 80 },
       stayContacts: {
         type: [{ _id: false, name: { type: String, trim: true }, role: { type: String, trim: true }, phone: { type: String, trim: true } }],
+        default: undefined
+      },
+      familiesTitle: { type: String, trim: true, maxlength: 80 },
+      families: {
+        type: [{ _id: false, label: { type: String, trim: true }, names: { type: String, trim: true }, quote: { type: Boolean } }],
         default: undefined
       },
       texts: { type: Schema.Types.Mixed, default: undefined }
