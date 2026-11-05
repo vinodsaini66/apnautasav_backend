@@ -88,7 +88,7 @@ export const updatePublicSettingsSchema = z.object({
     // '' (clear the override and fall back to the palette).
     invitation: z
       .object({
-        template: z.enum(['pastel-caricature', 'pastel-peaks', 'marigold-mela', 'shahi-raat', 'prem-patra', 'shubh-vivah', 'sindoor', 'phoolwari', 'vrindavan', 'madhubani', 'deepdaan']).optional(),
+        template: z.enum(['pastel-caricature', 'pastel-peaks', 'marigold-mela', 'shahi-raat', 'prem-patra', 'shubh-vivah', 'sindoor', 'phoolwari', 'vrindavan', 'madhubani', 'deepdaan', 'shagun']).optional(),
         // '' = back to the template's own default effect.
         effect: z.enum(['', 'confetti', 'colorful', 'hearts', 'stars', 'dots', 'petals', 'none']).optional(),
         palette: z.string().max(40).optional(),
@@ -106,6 +106,8 @@ export const updatePublicSettingsSchema = z.object({
         brideGrandparents: z.string().max(200).optional(),
         story: z.string().max(2000).optional(),
         storyQuote: z.string().max(300).optional(),
+        // YouTube link for the "Our story" film; '' clears it.
+        storyVideoUrl: z.string().max(500).optional(),
         gallery: z.array(z.string().max(1000)).max(24, 'Up to 24 gallery photos').optional(),
         musicUrl: z.string().max(1000).optional(),
         stayContacts: z

@@ -26,6 +26,8 @@ export interface IWeddingInvitation {
   brideGrandparents?: string;
   story?: string;
   storyQuote?: string;
+  /** YouTube link — the "Our story" film, embedded on templates that show one. */
+  storyVideoUrl?: string;
   gallery?: string[];
   musicUrl?: string;
   stayContacts?: { name: string; role?: string; phone?: string }[];
@@ -199,6 +201,7 @@ const weddingSchema = new Schema<IWedding>({
       brideGrandparents: { type: String, trim: true, maxlength: 200 },
       story: { type: String, trim: true, maxlength: 2000 },
       storyQuote: { type: String, trim: true, maxlength: 300 },
+      storyVideoUrl: { type: String, trim: true, maxlength: 500 },
       gallery: { type: [String], default: undefined },
       musicUrl: { type: String, trim: true },
       stayContacts: {
