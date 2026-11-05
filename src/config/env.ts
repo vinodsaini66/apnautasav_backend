@@ -19,6 +19,15 @@ const envSchema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_REGION: z.string().default('us-east-1'),
   AWS_S3_BUCKET: z.string().optional(),
+  // Cloudflare R2 (S3-compatible, free egress). Used instead of AWS S3 for
+  // uploads once all four are set — see config/s3.ts.
+  CLOUDFLARE_ACCESS_KEY_ID: z.string().optional(),
+  CLOUDFLARE_SECRET_ACCESS_KEY: z.string().optional(),
+  CLOUDFLARE_BUCKET: z.string().optional(),
+  CLOUDFLARE_S3_ENDPOINT: z.string().optional(),
+  // Public base URL the files are served from: the bucket's r2.dev URL for
+  // now, a custom domain (e.g. https://media.apnautsav.com) later.
+  CLOUDFLARE_PUBLIC_URL: z.string().optional(),
 });
 
 type EnvConfig = z.infer<typeof envSchema>;
