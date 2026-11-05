@@ -28,6 +28,14 @@ const envSchema = z.object({
   // Public base URL the files are served from: the bucket's r2.dev URL for
   // now, a custom domain (e.g. https://media.apnautsav.com) later.
   CLOUDFLARE_PUBLIC_URL: z.string().optional(),
+  // AI Assistant (services/ai.service.ts). The key is optional: without it
+  // the AI routes answer 503 and the rest of the API works as usual.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default('claude-haiku-5-5'),
+  // AI calls (voice extract + chat) allowed per day (IST): each person on a
+  // wedding gets their own share, and the wedding as a whole has a cap.
+  AI_USER_DAILY_LIMIT: z.coerce.number().int().positive().default(20),
+  AI_WEDDING_DAILY_LIMIT: z.coerce.number().int().positive().default(60),
 });
 
 type EnvConfig = z.infer<typeof envSchema>;
