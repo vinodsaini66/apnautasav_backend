@@ -144,18 +144,18 @@ export const NOTIFICATION_CATEGORY_OF: Record<string, NotificationCategory> = {
   crew_needs_reassign: 'crew',
 };
 
+// Listed function types (Vendor OS lib/bookings.ts FUNCTION_GROUPS mirrors
+// this). Not enforced: bookings/quotes accept any short name, so a vendor can
+// type one that isn't listed; 'other' is kept for older bookings.
 export const FUNCTION_TYPES = [
-  'roka',
-  'engagement',
-  'haldi',
-  'mehendi',
-  'sangeet',
-  'cocktail',
-  'baraat',
-  'pheras',
-  'wedding',
-  'reception',
-  'pre_wedding',
+  // Wedding
+  'roka', 'engagement', 'haldi', 'mehendi', 'sangeet', 'cocktail', 'baraat', 'pheras', 'wedding', 'reception', 'pre_wedding',
+  // Celebrations
+  'birthday', 'anniversary', 'baby_shower', 'naamkaran', 'mundan', 'griha_pravesh', 'get_together',
+  // Corporate
+  'corporate_event', 'conference', 'product_launch', 'award_night', 'team_offsite',
+  // Religious & other
+  'puja_jagran', 'concert_show',
   'other',
 ] as const;
 
